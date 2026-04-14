@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>원주시 초중등학교-의료기관 접근성 지도</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh;overflow:hidden}
+#map{flex:1;z-index:0}
+
+#sidebar{
+  width:380px;min-width:380px;background:#fff;
+  display:flex;flex-direction:column;
+  border-left:1px solid #ddd;
+  transition:margin-right .3s;
+  z-index:1;
+  overflow:hidden;
+}
+#sidebar.collapsed{margin-right:-380px}
+
+#sidebar-toggle{
+  position:absolute;right:380px;top:50%;z-index:1000;
+  transform:translateY(-50%);
+  width:28px;height:56px;
+  background:#fff;border:1px solid #ccc;border-right:none;
+  border-radius:8px 0 0 8px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:#555;
+  transition:right .3s;
+}
+#sidebar.collapsed ~ #sidebar-toggle{right:0}
+
+.sidebar-header{
+  padding:16px 20px 12px;border-bottom:1px solid #eee;
+  flex-shrink:0;
+}
+.sidebar-header h2{font-size:15px;color:#333;margin-bottom:8px}
+
+.search-box{position:relative;margin-bottom:6px}
+.search-box input{
+  width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;
+  font-size:13px;outline:none;transition:border-color .2s;
+}
+.search-box input:focus{border-color:#4a90d9}
+#searchResults{
+  list-style:none;position:absolute;top:100%;left:0;right:0;
+  background:#fff;border:1px solid #ddd;border-top:none;border-radius:0 0 6px 6px;
+  max-height:240px;overflow-y:auto;z-index:10;display:none;
+  box-shadow:0 4px 12px rgba(0,0,0,.1);
+}
+#searchResults li{
+  padding:8px 12px;font-size:13px;cursor:pointer;
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid #f0f0f0;
+}
+#searchResults li:hover{background:#f0f5ff}
+#searchResults .sr-tag{
+  font-size:11px;padding:1px 6px;border-radius:3px;color:#fff;white-space:nowrap;margin-left:8px;
+}
+
+.filter-section{
+  padding:12px 20px;border-bottom:1px solid #eee;flex-shrink:0;
+  max-height:260px;overflow-y:auto;
+}
+.filter-section h3{font-size:13px;color:#666;margin-bottom:8px}
+.filter-group{display:flex;flex-wrap:wrap;gap:4px 10px;margin-bottom:8px}
+.filter-group label{font-size:12px;color:#444;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.filter-group input[type=checkbox]{accent-color:#4a90d9;width:14px;height:14px}
+
+.count-row{
+  padding:10px 20px;border-bottom:1px solid #eee;flex-shrink:0;
+  font-size:12px;color:#888;display:flex;gap:16px;
+}
+.count-row span{display:flex;align-items:center;gap:4px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+
+#result-panel{flex:1;overflow-y:auto;padding:0}
+.result-header{
+  padding:14px 20px 10px;font-size:14px;font-weight:600;color:#333;
+  position:sticky;top:0;background:#fff;border-bottom:1px solid #eee;z-index:1;
+}
+.result-list{list-style:none}
+.result-item{
+  padding:10px 20px;border-bottom:1px solid #f0f0f0;
+  cursor:pointer;transition:background .15s;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.result-item:hover{background:#f5f8ff}
+.result-item.active{background:#e8f0fe}
+.result-name{font-size:13px;color:#333;flex:1}
+.result-type{font-size:11px;color:#888;margin:0 8px}
+.result-dist{font-size:13px;font-weight:600;color:#4a90d9;white-space:nowrap}
+.result-empty{padding:40px 20px;text-align:center;color:#aaa;font-size:13px}
+
+.n-selector{display:flex;align-items:center;gap:8px;margin-top:8px}
+.n-selector label{font-size:12px;color:#555}
+.n-selector select{font-size:12px;padding:2px 6px;border:1px solid #ccc;border-radius:4px}
+
+.radius-toggle{display:flex;align-items:center;gap:8px;margin-top:6px}
+.radius-toggle label{font-size:12px;color:#555;cursor:pointer;display:flex;align-items:center;gap:4px}
+
+.legend{
+  position:absolute;bottom:24px;left:12px;z-index:1000;
+  background:rgba(255,255,255,.95);padding:12px 16px;border-radius:8px;
+  box-shadow:0 2px 8px rgba(0,0,0,.15);font-size:12px;
+  max-width:200px;
+}
+.legend h4{margin-bottom:6px;font-size:13px;color:#333}
+.legend-item{display:flex;align-items:center;gap:6px;margin:3px 0}
+.legend-icon{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 2px rgba(0,0,0,.3)}
+
+.school-popup{text-align:center}
+.school-popup h3{font-size:14px;margin-bottom:4px}
+.school-popup p{font-size:12px;color:#666;margin-bottom:6px}
+.school-popup button{
+  background:#4a90d9;color:#fff;border:none;padding:6px 14px;
+  border-radius:4px;cursor:pointer;font-size:12px;
+}
+.school-popup button:hover{background:#3a7bc8}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="sidebar">
+  <div class="sidebar-header">
+    <h2>원주시 학교-의료기관 접근성</h2>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="학교 또는 의료기관 이름 검색..." autocomplete="off">
+      <ul id="searchResults"></ul>
+    </div>
+    <div class="n-selector">
+      <label>표시 개수:</label>
+      <select id="topN">
+        <option value="3">가까운 3개</option>
+        <option value="5" selected>가까운 5개</option>
+        <option value="10">가까운 10개</option>
+        <option value="all">전체</option>
+      </select>
+    </div>
+    <div class="radius-toggle">
+      <label><input type="checkbox" id="show1km"> 1km 반경</label>
+      <label><input type="checkbox" id="show3km"> 3km 반경</label>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <h3>학교급</h3>
+    <div class="filter-group" id="school-filters"></div>
+    <h3>의료기관 종별</h3>
+    <div class="filter-group" id="med-filters"></div>
+    <div class="filter-group" style="margin-top:6px">
+      <label><input type="checkbox" id="healthCheckOnly"> 학생건강검진 가능 기관만</label>
+    </div>
+  </div>
+
+  <div class="count-row" id="count-row"></div>
+
+  <div id="result-panel">
+    <div class="result-empty" id="empty-msg">학교를 클릭하면 가까운 의료기관을 표시합니다</div>
+    <div class="result-header" id="result-header" style="display:none"></div>
+    <ul class="result-list" id="result-list"></ul>
+  </div>
+</div>
+
+<button id="sidebar-toggle" onclick="toggleSidebar()">◀</button>
+
+<div class="legend">
+  <h4>범례</h4>
+  <div class="legend-item"><div style="width:20px;height:20px;background:#2563eb;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1.5px solid #fff;box-shadow:0 0 2px rgba(0,0,0,.3)">🏫</div> 초등학교</div>
+  <div class="legend-item"><div style="width:20px;height:20px;background:#7c3aed;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1.5px solid #fff;box-shadow:0 0 2px rgba(0,0,0,.3)">🎓</div> 중학교</div>
+  <div class="legend-item"><div class="legend-icon" style="background:#dc2626;width:16px;height:16px"></div> 종합/상급종합병원</div>
+  <div class="legend-item"><div class="legend-icon" style="background:#f97316"></div> 병원/의원</div>
+  <div class="legend-item"><div class="legend-icon" style="background:#a855f7"></div> 정신/요양병원</div>
+  <div class="legend-item"><div class="legend-icon" style="background:#059669"></div> 치과</div>
+  <div class="legend-item"><div class="legend-icon" style="background:#d97706"></div> 한방</div>
+</div>
+
+<script>
+const DATA = {"schools":[{"name":"고산초등학교","level":"초등학교","lat":37.446126,"lng":127.927956},{"name":"관설초등학교","level":"초등학교","lat":37.308784,"lng":127.976113},{"name":"교동초등학교","level":"초등학교","lat":37.33899,"lng":127.947004},{"name":"교학초등학교","level":"초등학교","lat":37.435356,"lng":128.055273},{"name":"귀래초등학교","level":"초등학교","lat":37.169179,"lng":127.883666},{"name":"금대초등학교","level":"초등학교","lat":37.289153,"lng":127.99642},{"name":"남원주초등학교","level":"초등학교","lat":37.322596,"lng":127.951224},{"name":"단계초등학교","level":"초등학교","lat":37.359077,"lng":127.936067},{"name":"단구초등학교","level":"초등학교","lat":37.322601,"lng":127.963909},{"name":"둔둔초등학교","level":"초등학교","lat":37.446682,"lng":127.979276},{"name":"만종초등학교","level":"초등학교","lat":37.355418,"lng":127.901894},{"name":"매지초등학교","level":"초등학교","lat":37.269163,"lng":127.906673},{"name":"명륜초등학교","level":"초등학교","lat":37.342415,"lng":127.958637},{"name":"문막초등학교","level":"초등학교","lat":37.312824,"lng":127.820484},{"name":"반계초등학교","level":"초등학교","lat":37.291931,"lng":127.790834},{"name":"봉대초등학교","level":"초등학교","lat":37.334133,"lng":127.988},{"name":"부론초등학교","level":"초등학교","lat":37.208302,"lng":127.748726},{"name":"북원초등학교","level":"초등학교","lat":37.343068,"lng":127.937976},{"name":"비두초등학교","level":"초등학교","lat":37.261121,"lng":127.834814},{"name":"산현초등학교","level":"초등학교","lat":37.425222,"lng":127.893517},{"name":"서곡초등학교","level":"초등학교","lat":37.298168,"lng":127.938965},{"name":"서원주초등학교","level":"초등학교","lat":37.327164,"lng":127.939678},{"name":"소초초등학교","level":"초등학교","lat":37.417687,"lng":128.004279},{"name":"신림초등학교","level":"초등학교","lat":37.231508,"lng":128.07859},{"name":"신평초등학교","level":"초등학교","lat":37.384881,"lng":127.892284},{"name":"우산초등학교","level":"초등학교","lat":37.36954,"lng":127.932765},{"name":"원주삼육초등학교","level":"초등학교","lat":37.326789,"lng":127.923242},{"name":"원주초등학교","level":"초등학교","lat":37.347842,"lng":127.958751},{"name":"일산초등학교","level":"초등학교","lat":37.346359,"lng":127.942355},{"name":"장양초등학교","level":"초등학교","lat":37.398716,"lng":127.95424},{"name":"중앙초등학교","level":"초등학교","lat":37.352757,"lng":127.939081},{"name":"지정초등학교","level":"초등학교","lat":37.348083,"lng":127.845718},{"name":"치악초등학교","level":"초등학교","lat":37.331448,"lng":127.939416},{"name":"태장초등학교","level":"초등학교","lat":37.377005,"lng":127.950804},{"name":"평원초등학교","level":"초등학교","lat":37.349663,"lng":127.931187},{"name":"학성초등학교","level":"초등학교","lat":37.360639,"lng":127.958984},{"name":"호저초등학교","level":"초등학교","lat":37.411541,"lng":127.925916},{"name":"황둔초등학교","level":"초등학교","lat":37.261627,"lng":128.185911},{"name":"흥양초등학교","level":"초등학교","lat":37.38071,"lng":127.997196},{"name":"흥업초등학교","level":"초등학교","lat":37.307335,"lng":127.908697},{"name":"태봉초등학교","level":"초등학교","lat":37.386139,"lng":127.956452},{"name":"동화초등학교","level":"초등학교","lat":37.327453,"lng":127.828692},{"name":"단관초등학교","level":"초등학교","lat":37.317626,"lng":127.963665},{"name":"무실초등학교","level":"초등학교","lat":37.334889,"lng":127.922077},{"name":"구곡초등학교","level":"초등학교","lat":37.325308,"lng":127.952756},{"name":"반곡초등학교","level":"초등학교","lat":37.337399,"lng":127.973112},{"name":"만대초등학교","level":"초등학교","lat":37.339382,"lng":127.920403},{"name":"솔샘초등학교","level":"초등학교","lat":37.330063,"lng":127.92951},{"name":"버들초등학교","level":"초등학교","lat":37.320507,"lng":127.98668},{"name":"섬강초등학교","level":"초등학교","lat":37.379315,"lng":127.873902},{"name":"샘마루초등학교","level":"초등학교","lat":37.37947,"lng":127.871085},{"name":"귀래중학교","level":"중학교","lat":37.171682,"lng":127.88496},{"name":"남원주중학교","level":"중학교","lat":37.322856,"lng":127.945275},{"name":"원주대성중학교","level":"중학교","lat":37.327468,"lng":127.9207},{"name":"문막중학교","level":"중학교","lat":37.30498,"lng":127.81468},{"name":"부론중학교","level":"중학교","lat":37.208154,"lng":127.752726},{"name":"북원중학교","level":"중학교","lat":37.386533,"lng":127.952737},{"name":"상지여자중학교","level":"중학교","lat":37.340502,"lng":127.960441},{"name":"신림중학교","level":"중학교","lat":37.229632,"lng":128.087862},{"name":"원주삼육중학교","level":"중학교","lat":37.326546,"lng":127.924131},{"name":"원주여자중학교","level":"중학교","lat":37.339498,"lng":127.945483},{"name":"원주중학교","level":"중학교","lat":37.337176,"lng":127.95811},{"name":"원주중학교부설방송통신중학교","level":"방송통신중","lat":37.337176,"lng":127.95811},{"name":"육민관중학교","level":"중학교","lat":37.307778,"lng":127.92092},{"name":"지정중학교","level":"중학교","lat":37.366112,"lng":127.838527},{"name":"진광중학교","level":"중학교","lat":37.372857,"lng":127.935818},{"name":"치악중학교","level":"중학교","lat":37.353745,"lng":127.930357},{"name":"평원중학교","level":"중학교","lat":37.33845,"lng":127.935981},{"name":"학성중학교","level":"중학교","lat":37.35026,"lng":127.939939},{"name":"호저중학교","level":"중학교","lat":37.41792,"lng":127.921702},{"name":"황둔중학교","level":"중학교","lat":37.262254,"lng":128.186643},{"name":"단구중학교","level":"중학교","lat":37.320663,"lng":127.956669},{"name":"반곡중학교","level":"중학교","lat":37.336315,"lng":127.973107},{"name":"태장중학교","level":"중학교","lat":37.357383,"lng":127.959889},{"name":"버들중학교","level":"중학교","lat":37.331379,"lng":127.98944},{"name":"섬강중학교","level":"중학교","lat":37.376866,"lng":127.880736}],"medical":[{"name":"연세대학교 원주세브란스기독병원","type":"상급종합병원","healthCheck":true,"lat":37.349155,"lng":127.945743},{"name":"강원특별자치도원주의료원","type":"종합병원","healthCheck":true,"lat":37.333008,"lng":127.948553},{"name":"원주센텀병원","type":"병원","healthCheck":true,"lat":37.333801,"lng":127.930203},{"name":"정병원","type":"병원","healthCheck":true,"lat":37.355204,"lng":127.932994},{"name":"현대중앙병원","type":"병원","healthCheck":true,"lat":37.3693,"lng":127.938931},{"name":"원주우리병원","type":"병원","healthCheck":true,"lat":37.373637,"lng":127.943444},{"name":"센트럴병원","type":"병원","healthCheck":true,"lat":37.352167,"lng":127.933854},{"name":"원주프라임병원","type":"병원","healthCheck":true,"lat":37.333485,"lng":127.947921},{"name":"의료법인삼산의료재단 삼산병원","type":"병원","healthCheck":true,"lat":37.326204,"lng":127.975199},{"name":"원주연세병원","type":"병원","healthCheck":true,"lat":37.356831,"lng":127.943739},{"name":"연세메디하임병원","type":"병원","healthCheck":true,"lat":37.326123,"lng":127.845051},{"name":"연세명인병원","type":"병원","healthCheck":true,"lat":37.353463,"lng":127.948595},{"name":"원주불로병원","type":"병원","healthCheck":true,"lat":37.356246,"lng":127.944462},{"name":"원주카톨릭병원","type":"병원","healthCheck":true,"lat":37.353883,"lng":127.941122},{"name":"민중병원","type":"병원","healthCheck":false,"lat":37.378621,"lng":127.946275},{"name":"의료법인성지의료재단성지병원","type":"병원","healthCheck":false,"lat":37.345518,"lng":127.954289},{"name":"원주성모병원","type":"병원","healthCheck":true,"lat":37.393582,"lng":127.984709},{"name":"본베스트병원","type":"병원","healthCheck":true,"lat":37.334837,"lng":127.930157},{"name":"영광재활병원","type":"병원","healthCheck":false,"lat":37.335767,"lng":127.991717},{"name":"내안에병원","type":"정신병원","healthCheck":false,"lat":37.334017,"lng":127.948722},{"name":"새마음병원","type":"정신병원","healthCheck":false,"lat":37.265423,"lng":127.824915},{"name":"연세요양병원","type":"요양병원","healthCheck":false,"lat":37.339759,"lng":127.951855},{"name":"바른요양병원","type":"요양병원","healthCheck":false,"lat":37.293172,"lng":127.990684},{"name":"원주효요양병원","type":"요양병원","healthCheck":false,"lat":37.353732,"lng":127.946157},{"name":"암오케이 요양병원","type":"요양병원","healthCheck":false,"lat":37.215886,"lng":128.088123},{"name":"문막요양병원","type":"요양병원","healthCheck":false,"lat":37.307854,"lng":127.816976},{"name":"현대요양병원","type":"요양병원","healthCheck":false,"lat":37.326219,"lng":127.962832},{"name":"정웅교비뇨기과의원","type":"의원","healthCheck":false,"lat":37.349553,"lng":127.949185},{"name":"이재순내과의원","type":"의원","healthCheck":true,"lat":37.349796,"lng":127.948338},{"name":"오드리의원","type":"의원","healthCheck":false,"lat":37.334837,"lng":127.930157},{"name":"파인땡큐앤드유외과의원","type":"의원","healthCheck":false,"lat":37.335953,"lng":127.928757},{"name":"피어라의원","type":"의원","healthCheck":false,"lat":37.374443,"lng":127.877673},{"name":"연세피부과의원","type":"의원","healthCheck":false,"lat":37.349669,"lng":127.948553},{"name":"송내과의원","type":"의원","healthCheck":false,"lat":37.34957,"lng":127.948011},{"name":"신샘내과의원","type":"의원","healthCheck":false,"lat":37.34948,"lng":127.94739},{"name":"연세나비이비인후과의원","type":"의원","healthCheck":false,"lat":37.382025,"lng":127.872929},{"name":"연세맑은내과의원","type":"의원","healthCheck":false,"lat":37.329494,"lng":127.949785},{"name":"드림연세안과의원","type":"의원","healthCheck":false,"lat":37.350318,"lng":127.948473},{"name":"하늘빛 정신건강의학과 의원","type":"의원","healthCheck":false,"lat":37.334153,"lng":127.93123},{"name":"닥터스킨피부과의원","type":"의원","healthCheck":false,"lat":37.330215,"lng":127.949649},{"name":"박동훈내과의원","type":"의원","healthCheck":true,"lat":37.346244,"lng":127.928769},{"name":"연세본정형외과마취통증의학과의원","type":"의원","healthCheck":false,"lat":37.341,"lng":127.971706},{"name":"연세탑이비인후과의원","type":"의원","healthCheck":false,"lat":37.32343,"lng":127.980435},{"name":"한빛이비인후과의원","type":"의원","healthCheck":false,"lat":37.339194,"lng":127.923618},{"name":"뉴코웰이비인후과의원","type":"의원","healthCheck":false,"lat":37.324568,"lng":127.958567},{"name":"리블룸의원","type":"의원","healthCheck":false,"lat":37.333107,"lng":127.93026},{"name":"연세봄산부인과의원","type":"의원","healthCheck":false,"lat":37.335953,"lng":127.928757},{"name":"연세수비뇨기과의원","type":"의원","healthCheck":false,"lat":37.344505,"lng":127.929764},{"name":"박현민성형외과의원","type":"의원","healthCheck":false,"lat":37.344099,"lng":127.928918},{"name":"죠훈신경외과의원","type":"의원","healthCheck":true,"lat":37.325403,"lng":127.978844},{"name":"만종의원","type":"의원","healthCheck":false,"lat":37.338789,"lng":127.899366},{"name":"손경수내과의원","type":"의원","healthCheck":true,"lat":37.342021,"lng":127.954043},{"name":"연세민내과의원","type":"의원","healthCheck":true,"lat":37.348896,"lng":127.951793},{"name":"푸른솔의원","type":"의원","healthCheck":false,"lat":37.347561,"lng":127.93098},{"name":"연세본비뇨기과의원","type":"의원","healthCheck":false,"lat":37.336385,"lng":127.928068},{"name":"태장고려의원","type":"의원","healthCheck":false,"lat":37.3611,"lng":127.960455},{"name":"마음편한정신건강의학과의원","type":"의원","healthCheck":false,"lat":37.330215,"lng":127.949649},{"name":"조안과의원","type":"의원","healthCheck":false,"lat":37.34948,"lng":127.94739},{"name":"연세봄재활의학과의원","type":"의원","healthCheck":false,"lat":37.344026,"lng":127.943636},{"name":"최원규소아청소년과의원","type":"의원","healthCheck":false,"lat":37.34957,"lng":127.948011},{"name":"서울내과의원","type":"의원","healthCheck":true,"lat":37.347092,"lng":127.930349},{"name":"윤장운마취통증의학과의원","type":"의원","healthCheck":false,"lat":37.348896,"lng":127.951793},{"name":"임수빈내과의원","type":"의원","healthCheck":true,"lat":37.335953,"lng":127.928757},{"name":"최해천성형외과의원","type":"의원","healthCheck":false,"lat":37.338605,"lng":127.952025},{"name":"앨리스의원","type":"의원","healthCheck":false,"lat":37.341833,"lng":127.955815},{"name":"원주위대한내과의원","type":"의원","healthCheck":true,"lat":37.333304,"lng":127.928048},{"name":"김동우외과의원","type":"의원","healthCheck":false,"lat":37.326732,"lng":127.829094},{"name":"하나내과의원","type":"의원","healthCheck":true,"lat":37.320218,"lng":127.964809},{"name":"청담심스성형외과의원","type":"의원","healthCheck":false,"lat":37.331097,"lng":127.947437},{"name":"조은가정의원","type":"의원","healthCheck":false,"lat":37.38376,"lng":127.95203},{"name":"연세키즈 소아청소년과의원","type":"의원","healthCheck":false,"lat":37.330467,"lng":127.949356},{"name":"온유가정의학과의원","type":"의원","healthCheck":false,"lat":37.375024,"lng":127.873043},{"name":"연세순풍산부인과의원","type":"의원","healthCheck":false,"lat":37.346578,"lng":127.930214},{"name":"강봉선신경정신과의원","type":"의원","healthCheck":false,"lat":37.331918,"lng":127.948554},{"name":"꿈에의원","type":"의원","healthCheck":false,"lat":37.321449,"lng":127.955308},{"name":"이미영샘내과의원","type":"의원","healthCheck":false,"lat":37.341,"lng":127.971706},{"name":"연세준재활의학과의원","type":"의원","healthCheck":false,"lat":37.375024,"lng":127.873043},{"name":"톡스앤필의원 원주점","type":"의원","healthCheck":false,"lat":37.343874,"lng":127.929359},{"name":"우리가정의원","type":"의원","healthCheck":false,"lat":37.318542,"lng":127.965893},{"name":"곽엄섭내과의원","type":"의원","healthCheck":true,"lat":37.381694,"lng":127.947605},{"name":"이형준내과의원","type":"의원","healthCheck":true,"lat":37.350318,"lng":127.948473},{"name":"키다리소아청소년과의원","type":"의원","healthCheck":false,"lat":37.384987,"lng":127.870451},{"name":"단구햇살의원","type":"의원","healthCheck":false,"lat":37.328038,"lng":127.960359},{"name":"연세남부내과의원","type":"의원","healthCheck":false,"lat":37.342157,"lng":127.954156},{"name":"오은경소아청소년과의원","type":"의원","healthCheck":false,"lat":37.341,"lng":127.971706},{"name":"흥업성모의원","type":"의원","healthCheck":false,"lat":37.302841,"lng":127.920316},{"name":"하니유외과의원","type":"의원","healthCheck":false,"lat":37.341,"lng":127.971706},{"name":"페런트 연합의원","type":"의원","healthCheck":false,"lat":37.33372,"lng":127.93097},{"name":"편안한마취통증의학과의원","type":"의원","healthCheck":false,"lat":37.342418,"lng":127.954438},{"name":"연세플러스비뇨의학과의원","type":"의원","healthCheck":false,"lat":37.34948,"lng":127.94739},{"name":"이성우내과의원","type":"의원","healthCheck":true,"lat":37.350743,"lng":127.951363},{"name":"고은미래의원","type":"의원","healthCheck":false,"lat":37.335953,"lng":127.928757},{"name":"연세임유리내과의원","type":"의원","healthCheck":true,"lat":37.382368,"lng":127.873245},{"name":"서이비인후과의원","type":"의원","healthCheck":false,"lat":37.342418,"lng":127.954438},{"name":"이용규내과의원","type":"의원","healthCheck":true,"lat":37.341195,"lng":127.938943},{"name":"퀸스영상의학과의원","type":"의원","healthCheck":true,"lat":37.349651,"lng":127.948316},{"name":"미즈산부인과의원","type":"의원","healthCheck":false,"lat":37.343534,"lng":127.932259},{"name":"송광선내과의원","type":"의원","healthCheck":true,"lat":37.308088,"lng":127.817201},{"name":"도담내과의원","type":"의원","healthCheck":true,"lat":37.36171,"lng":127.933282},{"name":"이진호이비인후과의원","type":"의원","healthCheck":false,"lat":37.348823,"lng":127.949569},{"name":"효성신경외과의원","type":"의원","healthCheck":false,"lat":37.325001,"lng":127.959594},{"name":"우성애 여성의원","type":"의원","healthCheck":true,"lat":37.336325,"lng":127.94951},{"name":"최동익성형외과의원","type":"의원","healthCheck":false,"lat":37.330791,"lng":127.94869},{"name":"Dr. 구의원","type":"의원","healthCheck":false,"lat":37.331026,"lng":127.948453},{"name":"중앙메디칼 연합의원","type":"의원","healthCheck":false,"lat":37.349293,"lng":127.952188},{"name":"다온재활의학과의원","type":"의원","healthCheck":false,"lat":37.334153,"lng":127.93123},{"name":"연세안과의원","type":"의원","healthCheck":false,"lat":37.35021,"lng":127.947954},{"name":"희망정형외과의원","type":"의원","healthCheck":false,"lat":37.336385,"lng":127.928068},{"name":"연희영상의학과의원","type":"의원","healthCheck":true,"lat":37.345768,"lng":127.931591},{"name":"미래산부인과의원","type":"의원","healthCheck":false,"lat":37.336072,"lng":127.948743},{"name":"연세그린내과의원","type":"의원","healthCheck":true,"lat":37.356953,"lng":127.935532},{"name":"드림365소아청소년과의원","type":"의원","healthCheck":true,"lat":37.382493,"lng":127.872387},{"name":"창문외과의원","type":"의원","healthCheck":false,"lat":37.343534,"lng":127.932259},{"name":"연세프라임안과의원","type":"의원","healthCheck":false,"lat":37.348616,"lng":127.949795},{"name":"이상진안과의원","type":"의원","healthCheck":false,"lat":37.346265,"lng":127.933318},{"name":"아나파마취통증의학과의원","type":"의원","healthCheck":false,"lat":37.346244,"lng":127.928769},{"name":"좋은 마음 정신건강의학과 의원","type":"의원","healthCheck":false,"lat":37.343874,"lng":127.929359},{"name":"고려제일의원","type":"의원","healthCheck":true,"lat":37.20803,"lng":127.749463},{"name":"부부소아청소년과의원","type":"의원","healthCheck":false,"lat":37.323858,"lng":127.829248},{"name":"누가이비인후과의원","type":"의원","healthCheck":false,"lat":37.330791,"lng":127.94869},{"name":"삼성서울리프앤톡스의원","type":"의원","healthCheck":false,"lat":37.324322,"lng":127.978144},{"name":"김이비인후과의원","type":"의원","healthCheck":false,"lat":37.350588,"lng":127.94783},{"name":"오킴스의원","type":"의원","healthCheck":false,"lat":37.336297,"lng":127.949081},{"name":"셀레스의원","type":"의원","healthCheck":false,"lat":37.345983,"lng":127.928815},{"name":"이건내과의원","type":"의원","healthCheck":true,"lat":37.336385,"lng":127.928068},{"name":"김대균의원","type":"의원","healthCheck":false,"lat":37.3209,"lng":127.955004},{"name":"홍성국신경정신과의원","type":"의원","healthCheck":false,"lat":37.352066,"lng":127.947185},{"name":"서울튼튼신경외과의원","type":"의원","healthCheck":false,"lat":37.350688,"lng":127.948959},{"name":"우리아이소아청소년과의원","type":"의원","healthCheck":false,"lat":37.322162,"lng":127.956018},{"name":"연세이비인후과의원","type":"의원","healthCheck":false,"lat":37.345604,"lng":127.928646},{"name":"남부밝은안과의원","type":"의원","healthCheck":false,"lat":37.342238,"lng":127.954212},{"name":"강남영내과의원","type":"의원","healthCheck":true,"lat":37.341555,"lng":127.960172},{"name":"엄재동정형외과의원","type":"의원","healthCheck":false,"lat":37.330971,"lng":127.947674},{"name":"율산부인과의원","type":"의원","healthCheck":false,"lat":37.334153,"lng":127.93123},{"name":"최경훈 내과의원","type":"의원","healthCheck":false,"lat":37.34948,"lng":127.94739},{"name":"오스정형외과의원","type":"의원","healthCheck":false,"lat":37.34566,"lng":127.932212},{"name":"연세늘내과이비인후과의원","type":"의원","healthCheck":false,"lat":37.334153,"lng":127.93123},{"name":"정내과의원","type":"의원","healthCheck":true,"lat":37.324352,"lng":127.958421},{"name":"블리비의원","type":"의원","healthCheck":false,"lat":37.330791,"lng":127.94869},{"name":"홍&권이비인후과의원","type":"의원","healthCheck":false,"lat":37.349472,"lng":127.950652},{"name":"학교법인상지학원부설상지푸른의원","type":"의원","healthCheck":true,"lat":37.370487,"lng":127.934245},{"name":"조남천항맥외과의원","type":"의원","healthCheck":false,"lat":37.343849,"lng":127.931322},{"name":"하이맨비뇨기과의원","type":"의원","healthCheck":false,"lat":37.345604,"lng":127.928646},{"name":"연세열린내과의원","type":"의원","healthCheck":true,"lat":37.352082,"lng":127.926303},{"name":"21세기소아청소년과의원","type":"의원","healthCheck":false,"lat":37.346956,"lng":127.928261},{"name":"이상봉비뇨기과의원","type":"의원","healthCheck":false,"lat":37.342418,"lng":127.954438},{"name":"김남두비뇨기과의원","type":"의원","healthCheck":false,"lat":37.349985,"lng":127.948722},{"name":"신희경산부인과의원","type":"의원","healthCheck":false,"lat":37.344055,"lng":127.9292},{"name":"우리안과의원","type":"의원","healthCheck":false,"lat":37.34005,"lng":127.923697},{"name":"원주마디정형외과의원","type":"의원","healthCheck":false,"lat":37.324911,"lng":127.95833},{"name":"타토아의원","type":"의원","healthCheck":false,"lat":37.32999,"lng":127.950011},{"name":"화인가정의원","type":"의원","healthCheck":false,"lat":37.382368,"lng":127.873245},{"name":"원주김안과의원","type":"의원","healthCheck":false,"lat":37.333801,"lng":127.930203},{"name":"더사랑소아청소년과의원","type":"의원","healthCheck":false,"lat":37.338611,"lng":127.96778},{"name":"연세참외과의원","type":"의원","healthCheck":false,"lat":37.331026,"lng":127.948453},{"name":"준소아청소년과의원","type":"의원","healthCheck":false,"lat":37.352082,"lng":127.926303},{"name":"밴스의원","type":"의원","healthCheck":false,"lat":37.329432,"lng":127.950891},{"name":"제로마취통증의학과의원","type":"의원","healthCheck":false,"lat":37.330215,"lng":127.949649},{"name":"김진수프롤로의원","type":"의원","healthCheck":false,"lat":37.346436,"lng":127.933363},{"name":"중앙의원","type":"의원","healthCheck":false,"lat":37.351265,"lng":127.950369},{"name":"한양정태열의원","type":"의원","healthCheck":false,"lat":37.383977,"lng":127.953566},{"name":"연세소울정신건강의학과의원","type":"의원","healthCheck":false,"lat":37.331581,"lng":127.926176},{"name":"연세고운맘소아청소년과의원","type":"의원","healthCheck":false,"lat":37.336178,"lng":127.927831},{"name":"신준현신경과의원","type":"의원","healthCheck":false,"lat":37.333764,"lng":127.928533},{"name":"연세메디컬의원","type":"의원","healthCheck":false,"lat":37.337367,"lng":127.926408},{"name":"김창동이비인후과의원","type":"의원","healthCheck":false,"lat":37.351372,"lng":127.947931},{"name":"마디세움 정형외과의원","type":"의원","healthCheck":false,"lat":37.382368,"lng":127.873245},{"name":"기린소아청소년과의원","type":"의원","healthCheck":false,"lat":37.378535,"lng":127.870587},{"name":"우리들소아청소년과의원","type":"의원","healthCheck":false,"lat":37.347435,"lng":127.950078},{"name":"서울황내과의원","type":"의원","healthCheck":true,"lat":37.334423,"lng":127.930823},{"name":"손안과의원","type":"의원","healthCheck":false,"lat":37.34392,"lng":127.930273},{"name":"오렌지가정의원","type":"의원","healthCheck":false,"lat":37.345757,"lng":127.927652},{"name":"강원의료복지사회적협동조합밝음의원","type":"의원","healthCheck":true,"lat":37.348589,"lng":127.951285},{"name":"민영의원","type":"의원","healthCheck":false,"lat":37.384181,"lng":127.947084},{"name":"엄마맘소아청소년과의원","type":"의원","healthCheck":false,"lat":37.325403,"lng":127.978844},{"name":"연세 혁신내과의원","type":"의원","healthCheck":true,"lat":37.323493,"lng":127.979984},{"name":"중앙정형외과의원","type":"의원","healthCheck":false,"lat":37.353968,"lng":127.9489},{"name":"백태준성형외과의원","type":"의원","healthCheck":false,"lat":37.347435,"lng":127.950078},{"name":"아이편한소아청소년과의원","type":"의원","healthCheck":false,"lat":37.321449,"lng":127.955308},{"name":"편하지의원","type":"의원","healthCheck":false,"lat":37.34041,"lng":127.92303},{"name":"아이튼튼소아청소년과의원","type":"의원","healthCheck":false,"lat":37.330215,"lng":127.949649},{"name":"연세준내과의원","type":"의원","healthCheck":true,"lat":37.343874,"lng":127.929359},{"name":"예사랑산부인과의원","type":"의원","healthCheck":false,"lat":37.350318,"lng":127.948473},{"name":"키즈메디소아청소년과의원","type":"의원","healthCheck":false,"lat":37.334153,"lng":127.93123},{"name":"한빛소아청소년과의원","type":"의원","healthCheck":false,"lat":37.384012,"lng":127.952007},{"name":"미소마취통증의학과의원","type":"의원","healthCheck":false,"lat":37.361574,"lng":127.932977},{"name":"연세봄이비인후과의원","type":"의원","healthCheck":false,"lat":37.341414,"lng":127.971266},{"name":"늘푸른의원","type":"의원","healthCheck":false,"lat":37.330048,"lng":127.959399},{"name":"연세장상민재활의학과의원","type":"의원","healthCheck":false,"lat":37.306331,"lng":127.816754},{"name":"위즈팍서울정형외과의원","type":"의원","healthCheck":false,"lat":37.345983,"lng":127.928815},{"name":"더편한정형외과의원","type":"의원","healthCheck":false,"lat":37.34948,"lng":127.94739},{"name":"마디튼튼마취통증의학과의원","type":"의원","healthCheck":false,"lat":37.333513,"lng":127.930722},{"name":"이신경정신과의원","type":"의원","healthCheck":false,"lat":37.349985,"lng":127.948722},{"name":"스마일연세의원","type":"의원","healthCheck":false,"lat":37.324911,"lng":127.95833},{"name":"원주밝은안과의원","type":"의원","healthCheck":false,"lat":37.330215,"lng":127.949649},{"name":"연세이명규내과의원","type":"의원","healthCheck":true,"lat":37.342067,"lng":127.95507},{"name":"원주의원","type":"의원","healthCheck":false,"lat":37.353732,"lng":127.946157},{"name":"연세한울내과의원","type":"의원","healthCheck":false,"lat":37.350076,"lng":127.951442},{"name":"명성메디칼의원","type":"의원","healthCheck":false,"lat":37.356872,"lng":127.955061},{"name":"고석만정신건강의학과의원","type":"의원","healthCheck":false,"lat":37.334423,"lng":127.930823},{"name":"영광의원","type":"의원","healthCheck":false,"lat":37.36757,"lng":127.938628},{"name":"원주영상의학과의원","type":"의원","healthCheck":true,"lat":37.334153,"lng":127.93123},{"name":"고려외과의원","type":"의원","healthCheck":false,"lat":37.356007,"lng":127.93524},{"name":"권혁준내과의원","type":"의원","healthCheck":true,"lat":37.344099,"lng":127.928918},{"name":"속시원한내과의원","type":"의원","healthCheck":true,"lat":37.338951,"lng":127.923449},{"name":"연규홍소아청소년과의원","type":"의원","healthCheck":false,"lat":37.33017,"lng":127.949051},{"name":"연세지안비뇨의학과의원","type":"의원","healthCheck":false,"lat":37.333801,"lng":127.930203},{"name":"연세오케이정형외과의원","type":"의원","healthCheck":false,"lat":37.330467,"lng":127.949356},{"name":"숲이비인후과의원","type":"의원","healthCheck":false,"lat":37.34392,"lng":127.930273},{"name":"백피부과의원","type":"의원","healthCheck":false,"lat":37.349796,"lng":127.948338},{"name":"지정내과의원","type":"의원","healthCheck":true,"lat":37.378535,"lng":127.870587},{"name":"서울외과의원","type":"의원","healthCheck":false,"lat":37.353129,"lng":127.945909},{"name":"원주시민의원","type":"의원","healthCheck":false,"lat":37.340597,"lng":127.952803},{"name":"탑정형외과의원","type":"의원","healthCheck":false,"lat":37.347343,"lng":127.928339},{"name":"유로진비뇨기과의원","type":"의원","healthCheck":false,"lat":37.343804,"lng":127.931684},{"name":"연세남부정형외과의원","type":"의원","healthCheck":false,"lat":37.342094,"lng":127.955713},{"name":"연세굿모닝내과의원","type":"의원","healthCheck":true,"lat":37.341847,"lng":127.972756},{"name":"안아픈세상의원","type":"의원","healthCheck":false,"lat":37.319668,"lng":127.940077},{"name":"이하우신경외과의원","type":"의원","healthCheck":false,"lat":37.347492,"lng":127.956218},{"name":"박규래정형외과의원","type":"의원","healthCheck":false,"lat":37.347813,"lng":127.948757},{"name":"소초함께의원","type":"의원","healthCheck":false,"lat":37.381622,"lng":127.974187},{"name":"고승연신경외과의원","type":"의원","healthCheck":false,"lat":37.333062,"lng":127.947695},{"name":"지쉘의원","type":"의원","healthCheck":false,"lat":37.378602,"lng":127.892617},{"name":"고려가정의원","type":"의원","healthCheck":false,"lat":37.332672,"lng":127.942155},{"name":"우리산부인과의원","type":"의원","healthCheck":false,"lat":37.341,"lng":127.971706},{"name":"미드림의원","type":"의원","healthCheck":false,"lat":37.344479,"lng":127.929945},{"name":"신림연세의원","type":"의원","healthCheck":false,"lat":37.229561,"lng":128.081456},{"name":"아름다운산부인과의원","type":"의원","healthCheck":false,"lat":37.345388,"lng":127.928612},{"name":"함경종정형외과의원","type":"의원","healthCheck":false,"lat":37.350689,"lng":127.951498},{"name":"원주스노우의원","type":"의원","healthCheck":false,"lat":37.334153,"lng":127.93123},{"name":"우리들성형외과의원","type":"의원","healthCheck":false,"lat":37.343804,"lng":127.931684},{"name":"365플러스의원","type":"의원","healthCheck":false,"lat":37.318221,"lng":127.948382},{"name":"21세기본튼튼의원","type":"의원","healthCheck":false,"lat":37.356872,"lng":127.955061},{"name":"강훈소아청소년과의원","type":"의원","healthCheck":false,"lat":37.323412,"lng":127.981676},{"name":"나다운 정신건강의학과의원","type":"의원","healthCheck":false,"lat":37.351211,"lng":127.9509},{"name":"서울성모정신건강의학과의원","type":"의원","healthCheck":false,"lat":37.339429,"lng":127.924713},{"name":"원주연세의원","type":"의원","healthCheck":true,"lat":37.301426,"lng":127.919269},{"name":"강남제이스타의원","type":"의원","healthCheck":false,"lat":37.334837,"lng":127.930157},{"name":"임연웅신경외과의원","type":"의원","healthCheck":false,"lat":37.339429,"lng":127.924713},{"name":"서울탑마취통증의학과의원","type":"의원","healthCheck":false,"lat":37.350724,"lng":127.95011},{"name":"고은의원","type":"의원","healthCheck":false,"lat":37.347136,"lng":127.928306},{"name":"제일의원","type":"의원","healthCheck":false,"lat":37.348283,"lng":127.951703},{"name":"이석원내과의원","type":"의원","healthCheck":true,"lat":37.351959,"lng":127.950289},{"name":"한국한센복지협회강원도지부부설복지의원","type":"의원","healthCheck":false,"lat":37.352282,"lng":127.946463},{"name":"매일진료365의원","type":"의원","healthCheck":false,"lat":37.333513,"lng":127.930722},{"name":"도홍림이비인후과의원","type":"의원","healthCheck":false,"lat":37.34948,"lng":127.94739},{"name":"이광훈내과의원","type":"의원","healthCheck":false,"lat":37.351959,"lng":127.950289},{"name":"원주유앤항외과의원","type":"의원","healthCheck":false,"lat":37.334837,"lng":127.930157},{"name":"김정권내과의원","type":"의원","healthCheck":false,"lat":37.349427,"lng":127.950303},{"name":"도움의원","type":"의원","healthCheck":false,"lat":37.378792,"lng":127.94641},{"name":"서울이내과의원","type":"의원","healthCheck":true,"lat":37.329774,"lng":127.950327},{"name":"원의원","type":"의원","healthCheck":false,"lat":37.368082,"lng":127.936686},{"name":"원더스의원","type":"의원","healthCheck":false,"lat":37.344001,"lng":127.929731},{"name":"희망찬여성의원","type":"의원","healthCheck":false,"lat":37.324232,"lng":127.979115},{"name":"김영석이비인후과의원","type":"의원","healthCheck":false,"lat":37.329774,"lng":127.950327},{"name":"연세시원한외과의원","type":"의원","healthCheck":false,"lat":37.333304,"lng":127.928048},{"name":"천정학내과의원","type":"의원","healthCheck":true,"lat":37.330611,"lng":127.948002},{"name":"진제통의원","type":"의원","healthCheck":false,"lat":37.324592,"lng":127.981608},{"name":"소망의원","type":"의원","healthCheck":false,"lat":37.351013,"lng":127.949635},{"name":"강윤철피부과의원","type":"의원","healthCheck":false,"lat":37.350318,"lng":127.948473},{"name":"송정의원","type":"의원","healthCheck":false,"lat":37.306204,"lng":127.816585},{"name":"지성정형외과의원","type":"의원","healthCheck":false,"lat":37.318577,"lng":127.82891},{"name":"그랜드치과병원","type":"치과병원","healthCheck":true,"lat":37.343741,"lng":127.932169},{"name":"서울매일치과병원","type":"치과병원","healthCheck":true,"lat":37.339429,"lng":127.924713},{"name":"서울토론토치과의원","type":"치과의원","healthCheck":true,"lat":37.331532,"lng":127.991119},{"name":"굿모닝치과의원","type":"치과의원","healthCheck":true,"lat":37.323412,"lng":127.981676},{"name":"원주유디치과의원","type":"치과의원","healthCheck":true,"lat":37.343874,"lng":127.929359},{"name":"에벤에셀치과의원","type":"치과의원","healthCheck":true,"lat":37.317227,"lng":127.967924},{"name":"이사랑치과의원","type":"치과의원","healthCheck":true,"lat":37.337123,"lng":127.964034},{"name":"연세아이편한치과의원","type":"치과의원","healthCheck":true,"lat":37.334837,"lng":127.930157},{"name":"이스타치과의원","type":"치과의원","healthCheck":true,"lat":37.351805,"lng":127.931405},{"name":"예스치과의원","type":"치과의원","healthCheck":false,"lat":37.348823,"lng":127.949569},{"name":"서울윤치과의원","type":"치과의원","healthCheck":true,"lat":37.323965,"lng":127.957575},{"name":"리더스치과의원","type":"치과의원","healthCheck":true,"lat":37.350271,"lng":127.926666},{"name":"단계뿌리깊은치과의원","type":"치과의원","healthCheck":true,"lat":37.344479,"lng":127.929945},{"name":"서울에이스치과의원","type":"치과의원","healthCheck":true,"lat":37.383977,"lng":127.953566},{"name":"치과의정석치과의원","type":"치과의원","healthCheck":true,"lat":37.334423,"lng":127.930823},{"name":"연세이튼치과의원","type":"치과의원","healthCheck":false,"lat":37.327972,"lng":127.9862},{"name":"세한치과의원","type":"치과의원","healthCheck":false,"lat":37.306998,"lng":127.81699},{"name":"화성치과의원","type":"치과의원","healthCheck":false,"lat":37.347104,"lng":127.954424},{"name":"위치과의원","type":"치과의원","healthCheck":true,"lat":37.356953,"lng":127.935532},{"name":"스마일치과의원","type":"치과의원","healthCheck":true,"lat":37.308269,"lng":127.817302},{"name":"킴스주니어치과의원","type":"치과의원","healthCheck":true,"lat":37.341222,"lng":127.940331},{"name":"다담웃음치과의원","type":"치과의원","healthCheck":true,"lat":37.384987,"lng":127.870451},{"name":"베스트치과의원","type":"치과의원","healthCheck":false,"lat":37.321449,"lng":127.955308},{"name":"천진호치과의원","type":"치과의원","healthCheck":true,"lat":37.333513,"lng":127.930722},{"name":"연세프라임치과의원","type":"치과의원","healthCheck":true,"lat":37.330215,"lng":127.949649},{"name":"연세스카이치과의원","type":"치과의원","healthCheck":true,"lat":37.321666,"lng":127.956075},{"name":"닥터리치과의원","type":"치과의원","healthCheck":true,"lat":37.341847,"lng":127.972756},{"name":"서울명문치과의원","type":"치과의원","healthCheck":false,"lat":37.315109,"lng":127.965974},{"name":"원일치과의원","type":"치과의원","healthCheck":true,"lat":37.330764,"lng":127.948137},{"name":"연세치과의원","type":"치과의원","healthCheck":true,"lat":37.341195,"lng":127.938943},{"name":"원주율치과의원","type":"치과의원","healthCheck":true,"lat":37.333296,"lng":127.947751},{"name":"연세탑치과의원","type":"치과의원","healthCheck":true,"lat":37.382493,"lng":127.872387},{"name":"원주웰치과의원","type":"치과의원","healthCheck":true,"lat":37.336764,"lng":127.927413},{"name":"서울인성치과의원","type":"치과의원","healthCheck":true,"lat":37.301426,"lng":127.919269},{"name":"이앤이치과의원","type":"치과의원","healthCheck":false,"lat":37.330611,"lng":127.948002},{"name":"황선달치과의원","type":"치과의원","healthCheck":false,"lat":37.349985,"lng":127.948722},{"name":"로스윌서울이싫어내려온치과의원","type":"치과의원","healthCheck":false,"lat":37.329774,"lng":127.950327},{"name":"고운치과교정과치과의원","type":"치과의원","healthCheck":false,"lat":37.32999,"lng":127.950011},{"name":"강남후생치과의원","type":"치과의원","healthCheck":true,"lat":37.385083,"lng":127.947919},{"name":"화이트e치과의원","type":"치과의원","healthCheck":true,"lat":37.324911,"lng":127.95833},{"name":"프렌즈치과의원","type":"치과의원","healthCheck":true,"lat":37.384668,"lng":127.947332},{"name":"연우치과의원","type":"치과의원","healthCheck":true,"lat":37.349651,"lng":127.948316},{"name":"세명치과의원","type":"치과의원","healthCheck":false,"lat":37.34189,"lng":127.964664},{"name":"삼성서울치과의원","type":"치과의원","healthCheck":true,"lat":37.334837,"lng":127.930157},{"name":"서울더바른치과의원","type":"치과의원","healthCheck":true,"lat":37.321932,"lng":127.831091},{"name":"서울수치과의원","type":"치과의원","healthCheck":true,"lat":37.323493,"lng":127.979984},{"name":"태장치과의원","type":"치과의원","healthCheck":true,"lat":37.372502,"lng":127.969233},{"name":"참좋은치과의원","type":"치과의원","healthCheck":false,"lat":37.347687,"lng":127.929851},{"name":"서울열린치과의원","type":"치과의원","healthCheck":true,"lat":37.336106,"lng":127.928485},{"name":"북원치과의원","type":"치과의원","healthCheck":true,"lat":37.384407,"lng":127.947784},{"name":"샤인치과의원","type":"치과의원","healthCheck":true,"lat":37.346956,"lng":127.928261},{"name":"e-플란트미래치과의원","type":"치과의원","healthCheck":false,"lat":37.331918,"lng":127.948554},{"name":"닥터유 부부치과의원","type":"치과의원","healthCheck":false,"lat":37.338675,"lng":127.972238},{"name":"치과명작치과의원","type":"치과의원","healthCheck":true,"lat":37.330791,"lng":127.94869},{"name":"바른길치과의원","type":"치과의원","healthCheck":true,"lat":37.366687,"lng":127.940232},{"name":"연세부부치과의원","type":"치과의원","healthCheck":true,"lat":37.361808,"lng":127.932333},{"name":"삼성서울 치과교정과 치과의원","type":"치과의원","healthCheck":false,"lat":37.334837,"lng":127.930157},{"name":"다람쥐키즈치과의원","type":"치과의원","healthCheck":true,"lat":37.382493,"lng":127.872387},{"name":"이편한치과의원","type":"치과의원","healthCheck":true,"lat":37.338951,"lng":127.923449},{"name":"마리치과의원","type":"치과의원","healthCheck":true,"lat":37.349111,"lng":127.94984},{"name":"하늘치과의원","type":"치과의원","healthCheck":true,"lat":37.331816,"lng":127.926413},{"name":"연세사랑나눔치과의원","type":"치과의원","healthCheck":true,"lat":37.36353,"lng":127.932716},{"name":"신호드림치과의원","type":"치과의원","healthCheck":true,"lat":37.356503,"lng":127.956213},{"name":"서울니어치과의원","type":"치과의원","healthCheck":true,"lat":37.374288,"lng":127.875844},{"name":"연세바른치과의원","type":"치과의원","healthCheck":true,"lat":37.333304,"lng":127.928048},{"name":"원주샘치과의원","type":"치과의원","healthCheck":true,"lat":37.34222,"lng":127.955059},{"name":"이영호치과의원","type":"치과의원","healthCheck":false,"lat":37.34957,"lng":127.948011},{"name":"원주STM치과의원","type":"치과의원","healthCheck":false,"lat":37.33372,"lng":127.93097},{"name":"하나치과의원","type":"치과의원","healthCheck":true,"lat":37.341664,"lng":127.940398},{"name":"본치과의원","type":"치과의원","healthCheck":false,"lat":37.346588,"lng":127.950079},{"name":"센텀플란트치과의원","type":"치과의원","healthCheck":true,"lat":37.333801,"lng":127.930203},{"name":"하얀이치과의원","type":"치과의원","healthCheck":true,"lat":37.331581,"lng":127.926176},{"name":"유앤미치과의원","type":"치과의원","healthCheck":true,"lat":37.382368,"lng":127.873245},{"name":"에이플치과의원","type":"치과의원","healthCheck":true,"lat":37.352082,"lng":127.926303},{"name":"서울플란트치과의원","type":"치과의원","healthCheck":true,"lat":37.378535,"lng":127.870587},{"name":"원주클라인치과의원","type":"치과의원","healthCheck":true,"lat":37.346244,"lng":127.928769},{"name":"건강한치과의원","type":"치과의원","healthCheck":true,"lat":37.325602,"lng":127.987792},{"name":"탑치과의원","type":"치과의원","healthCheck":true,"lat":37.341833,"lng":127.955815},{"name":"미소치과의원","type":"치과의원","healthCheck":false,"lat":37.336385,"lng":127.928068},{"name":"하나로치과의원","type":"치과의원","healthCheck":false,"lat":37.320218,"lng":127.964809},{"name":"스토리치과의원","type":"치과의원","healthCheck":true,"lat":37.334153,"lng":127.93123},{"name":"한사랑치과의원","type":"치과의원","healthCheck":true,"lat":37.321875,"lng":127.939455},{"name":"디지털월드치과의원","type":"치과의원","healthCheck":true,"lat":37.310046,"lng":127.944575},{"name":"정직한치과의원","type":"치과의원","healthCheck":true,"lat":37.341538,"lng":127.940105},{"name":"한빛치과의원","type":"치과의원","healthCheck":true,"lat":37.330791,"lng":127.94869},{"name":"아이조아치과의원","type":"치과의원","healthCheck":true,"lat":37.323412,"lng":127.981676},{"name":"이로운치과의원","type":"치과의원","healthCheck":true,"lat":37.341,"lng":127.971706},{"name":"이로운치과의원","type":"치과의원","healthCheck":true,"lat":37.341,"lng":127.971706},{"name":"상아치과의원","type":"치과의원","healthCheck":true,"lat":37.330467,"lng":127.949356},{"name":"28지킴이치과의원","type":"치과의원","healthCheck":true,"lat":37.345983,"lng":127.928815},{"name":"오케이치과의원","type":"치과의원","healthCheck":true,"lat":37.323655,"lng":127.979374},{"name":"이로운치과의원","type":"치과의원","healthCheck":true,"lat":37.341,"lng":127.971706},{"name":"연세이안치과의원","type":"치과의원","healthCheck":true,"lat":37.341414,"lng":127.971266},{"name":"늘푸른치과의원","type":"치과의원","healthCheck":true,"lat":37.383985,"lng":127.952572},{"name":"아이온가족치과의원","type":"치과의원","healthCheck":true,"lat":37.334836,"lng":127.971765},{"name":"키노인터네셔널치과의원","type":"치과의원","healthCheck":true,"lat":37.350318,"lng":127.948473},{"name":"스카이치과의원","type":"치과의원","healthCheck":false,"lat":37.347256,"lng":127.951715},{"name":"고은아이치과의원","type":"치과의원","healthCheck":true,"lat":37.32999,"lng":127.950011},{"name":"원주치과의원","type":"치과의원","healthCheck":true,"lat":37.347343,"lng":127.928339},{"name":"중앙플란트치과의원","type":"치과의원","healthCheck":true,"lat":37.351959,"lng":127.950289},{"name":"전치과의원","type":"치과의원","healthCheck":false,"lat":37.350435,"lng":127.948315},{"name":"중앙치과의원","type":"치과의원","healthCheck":true,"lat":37.349526,"lng":127.949264},{"name":"엔치과의원","type":"치과의원","healthCheck":true,"lat":37.342337,"lng":127.954291},{"name":"튼튼치과의원","type":"치과의원","healthCheck":true,"lat":37.322566,"lng":127.952408},{"name":"최영권치과의원","type":"치과의원","healthCheck":true,"lat":37.348976,"lng":127.948948},{"name":"오복치과의원","type":"치과의원","healthCheck":false,"lat":37.343683,"lng":127.942857},{"name":"서울수려한치과의원","type":"치과의원","healthCheck":true,"lat":37.334153,"lng":127.93123},{"name":"닥터후치과의원","type":"치과의원","healthCheck":true,"lat":37.335953,"lng":127.928757},{"name":"연세문막치과의원","type":"치과의원","healthCheck":true,"lat":37.315343,"lng":127.823502},{"name":"부부치과의원","type":"치과의원","healthCheck":true,"lat":37.349472,"lng":127.950652},{"name":"세브란스치과의원","type":"치과의원","healthCheck":true,"lat":37.3493,"lng":127.947515},{"name":"은행나무치과의원","type":"치과의원","healthCheck":true,"lat":37.342418,"lng":127.954438},{"name":"문막애치과의원","type":"치과의원","healthCheck":true,"lat":37.326732,"lng":127.829094},{"name":"불로한방병원","type":"한방병원","healthCheck":false,"lat":37.356246,"lng":127.944462},{"name":"바른몸한방병원","type":"한방병원","healthCheck":false,"lat":37.315109,"lng":127.965974},{"name":"강남한방병원","type":"한방병원","healthCheck":false,"lat":37.327972,"lng":127.9862},{"name":"신원주한방병원","type":"한방병원","healthCheck":false,"lat":37.374288,"lng":127.875844},{"name":"상지대학교부속 한방병원","type":"한방병원","healthCheck":false,"lat":37.370487,"lng":127.934245},{"name":"사랑손한의원","type":"한의원","healthCheck":false,"lat":37.337289,"lng":127.932807},{"name":"백세한의원","type":"한의원","healthCheck":false,"lat":37.361306,"lng":127.957396},{"name":"예그린한의원","type":"한의원","healthCheck":false,"lat":37.343875,"lng":127.930735},{"name":"우리가족한의원","type":"한의원","healthCheck":false,"lat":37.3209,"lng":127.955004},{"name":"원주약선당한의원","type":"한의원","healthCheck":false,"lat":37.340645,"lng":127.939587},{"name":"계수나무한의원","type":"한의원","healthCheck":false,"lat":37.317498,"lng":127.969019},{"name":"경희해문한의원","type":"한의원","healthCheck":false,"lat":37.333801,"lng":127.930203},{"name":"동강한의원","type":"한의원","healthCheck":false,"lat":37.328834,"lng":127.944719},{"name":"의함다래평생한의원","type":"한의원","healthCheck":false,"lat":37.352108,"lng":127.940797},{"name":"백두한의원","type":"한의원","healthCheck":false,"lat":37.352102,"lng":127.946643},{"name":"민제한의원","type":"한의원","healthCheck":false,"lat":37.330467,"lng":127.949356},{"name":"생명수한의원","type":"한의원","healthCheck":false,"lat":37.350994,"lng":127.947536},{"name":"수연한의원","type":"한의원","healthCheck":false,"lat":37.361736,"lng":127.932559},{"name":"백록담한의원","type":"한의원","healthCheck":false,"lat":37.343428,"lng":127.955972},{"name":"다정한의원","type":"한의원","healthCheck":false,"lat":37.347139,"lng":127.953351},{"name":"광인당한의원","type":"한의원","healthCheck":false,"lat":37.338903,"lng":127.951483},{"name":"대흥한의원","type":"한의원","healthCheck":false,"lat":37.356463,"lng":127.929256},{"name":"권한의원","type":"한의원","healthCheck":false,"lat":37.319948,"lng":127.965306},{"name":"경희 해맑은한의원","type":"한의원","healthCheck":false,"lat":37.335953,"lng":127.928757},{"name":"동의보감한의원","type":"한의원","healthCheck":false,"lat":37.348724,"lng":127.950958},{"name":"신중한의원","type":"한의원","healthCheck":false,"lat":37.32448,"lng":127.829585},{"name":"신선한의원","type":"한의원","healthCheck":false,"lat":37.433789,"lng":127.989989},{"name":"내몸사랑한의원","type":"한의원","healthCheck":false,"lat":37.338951,"lng":127.923449},{"name":"양상묵한의원","type":"한의원","healthCheck":false,"lat":37.330458,"lng":127.948115},{"name":"평강한의원","type":"한의원","healthCheck":false,"lat":37.34957,"lng":127.948011},{"name":"화평당한의원","type":"한의원","healthCheck":false,"lat":37.342143,"lng":127.968805},{"name":"경희미려한의원","type":"한의원","healthCheck":false,"lat":37.330215,"lng":127.949649},{"name":"상지명인한의원","type":"한의원","healthCheck":false,"lat":37.346154,"lng":127.946512},{"name":"천일한의원","type":"한의원","healthCheck":false,"lat":37.230014,"lng":128.078053},{"name":"정운기한의원","type":"한의원","healthCheck":false,"lat":37.336764,"lng":127.927413},{"name":"예인한의원","type":"한의원","healthCheck":false,"lat":37.32019,"lng":127.960172},{"name":"혜민한의원","type":"한의원","healthCheck":false,"lat":37.34206,"lng":127.939619},{"name":"문막한의원","type":"한의원","healthCheck":false,"lat":37.308143,"lng":127.817652},{"name":"소나무한의원","type":"한의원","healthCheck":false,"lat":37.350986,"lng":127.951159},{"name":"이성문한의원","type":"한의원","healthCheck":false,"lat":37.318966,"lng":127.967382},{"name":"혜명한의원","type":"한의원","healthCheck":false,"lat":37.344833,"lng":127.954369},{"name":"기운내한의원","type":"한의원","healthCheck":false,"lat":37.328288,"lng":127.951908},{"name":"세진한의원","type":"한의원","healthCheck":false,"lat":37.336262,"lng":127.9503},{"name":"선율당한의원","type":"한의원","healthCheck":false,"lat":37.319155,"lng":127.966288},{"name":"유앤미한의원","type":"한의원","healthCheck":false,"lat":37.383985,"lng":127.952572},{"name":"맥한의원","type":"한의원","healthCheck":false,"lat":37.323412,"lng":127.981676},{"name":"모두올한의원","type":"한의원","healthCheck":false,"lat":37.324322,"lng":127.978144},{"name":"은행나무한의원","type":"한의원","healthCheck":false,"lat":37.306942,"lng":127.815828},{"name":"당청운한의원","type":"한의원","healthCheck":false,"lat":37.34141,"lng":127.92181},{"name":"바른한의원","type":"한의원","healthCheck":false,"lat":37.351021,"lng":127.94731},{"name":"한초당한의원","type":"한의원","healthCheck":false,"lat":37.351049,"lng":127.950505},{"name":"은혜한의원","type":"한의원","healthCheck":false,"lat":37.332782,"lng":127.929256},{"name":"경희나무한의원","type":"한의원","healthCheck":false,"lat":37.352082,"lng":127.926303},{"name":"어진한의원","type":"한의원","healthCheck":false,"lat":37.317227,"lng":127.967924},{"name":"지월한의원","type":"한의원","healthCheck":false,"lat":37.336106,"lng":127.928485},{"name":"정성한의원","type":"한의원","healthCheck":false,"lat":37.322432,"lng":127.956255},{"name":"문막동화한의원","type":"한의원","healthCheck":false,"lat":37.326732,"lng":127.829094},{"name":"인덕한의원","type":"한의원","healthCheck":false,"lat":37.336325,"lng":127.94951},{"name":"승산한의원","type":"한의원","healthCheck":false,"lat":37.334502,"lng":127.943654},{"name":"남부한의원","type":"한의원","healthCheck":false,"lat":37.342238,"lng":127.954212},{"name":"총통한의원","type":"한의원","healthCheck":false,"lat":37.334423,"lng":127.930823},{"name":"지선당한의원","type":"한의원","healthCheck":false,"lat":37.334837,"lng":127.930157},{"name":"효성한의원","type":"한의원","healthCheck":false,"lat":37.302714,"lng":127.918511},{"name":"기린한의원","type":"한의원","healthCheck":false,"lat":37.345885,"lng":127.931174},{"name":"몸편안한의원","type":"한의원","healthCheck":false,"lat":37.341833,"lng":127.955815},{"name":"제민당한의원","type":"한의원","healthCheck":false,"lat":37.325191,"lng":127.961365},{"name":"최한의원","type":"한의원","healthCheck":false,"lat":37.310876,"lng":127.819372},{"name":"하나한의원","type":"한의원","healthCheck":false,"lat":37.356503,"lng":127.956213},{"name":"고려한의원","type":"한의원","healthCheck":false,"lat":37.34112,"lng":127.953942},{"name":"대세한의원","type":"한의원","healthCheck":false,"lat":37.382493,"lng":127.872387},{"name":"동아한의원","type":"한의원","healthCheck":false,"lat":37.325047,"lng":127.961455},{"name":"김희성한의원","type":"한의원","healthCheck":false,"lat":37.331581,"lng":127.926176},{"name":"안흥한의원","type":"한의원","healthCheck":false,"lat":37.382992,"lng":127.947435},{"name":"서상원한의원","type":"한의원","healthCheck":false,"lat":37.32999,"lng":127.950011},{"name":"이현주한의원","type":"한의원","healthCheck":false,"lat":37.201104,"lng":127.896372},{"name":"전찬일한의원","type":"한의원","healthCheck":false,"lat":37.330764,"lng":127.948137},{"name":"여민한의원","type":"한의원","healthCheck":false,"lat":37.341944,"lng":127.964855},{"name":"으뜸한의원","type":"한의원","healthCheck":false,"lat":37.350688,"lng":127.948959},{"name":"부론한의원","type":"한의원","healthCheck":false,"lat":37.207978,"lng":127.750251},{"name":"해담한의원","type":"한의원","healthCheck":false,"lat":37.323655,"lng":127.979374},{"name":"경희다인한의원","type":"한의원","healthCheck":false,"lat":37.382493,"lng":127.872387},{"name":"무실한의원","type":"한의원","healthCheck":false,"lat":37.334423,"lng":127.930823},{"name":"맑은숲 한의원","type":"한의원","healthCheck":false,"lat":37.337151,"lng":127.926746},{"name":"모아한의원","type":"한의원","healthCheck":false,"lat":37.347535,"lng":127.951444},{"name":"경희한의원","type":"한의원","healthCheck":false,"lat":37.339263,"lng":127.951235},{"name":"아침한의원","type":"한의원","healthCheck":false,"lat":37.331133,"lng":127.947144},{"name":"원주가온한의원","type":"한의원","healthCheck":false,"lat":37.331665,"lng":127.94747},{"name":"토지한의원","type":"한의원","healthCheck":false,"lat":37.321333,"lng":127.955872},{"name":"자연과한의원 원주점","type":"한의원","healthCheck":false,"lat":37.334837,"lng":127.930157},{"name":"차림한의원","type":"한의원","healthCheck":false,"lat":37.325008,"lng":127.98804},{"name":"다다함한방내과한의원","type":"한의원","healthCheck":false,"lat":37.339194,"lng":127.923618},{"name":"흥업한의원","type":"한의원","healthCheck":false,"lat":37.302165,"lng":127.91946},{"name":"플러스한의원","type":"한의원","healthCheck":false,"lat":37.340507,"lng":127.952757},{"name":"경희후한의원","type":"한의원","healthCheck":false,"lat":37.333574,"lng":127.928353},{"name":"숲한의원","type":"한의원","healthCheck":false,"lat":37.353058,"lng":127.931494},{"name":"사상참경희한의원","type":"한의원","healthCheck":false,"lat":37.341414,"lng":127.971266},{"name":"치악산한의원","type":"한의원","healthCheck":false,"lat":37.439577,"lng":128.061262},{"name":"행복한의원","type":"한의원","healthCheck":false,"lat":37.333104,"lng":127.941647},{"name":"삼대한의원","type":"한의원","healthCheck":false,"lat":37.356284,"lng":127.931266},{"name":"이득수한의원","type":"한의원","healthCheck":false,"lat":37.375024,"lng":127.873043},{"name":"중의한의원","type":"한의원","healthCheck":false,"lat":37.348247,"lng":127.952301},{"name":"강남한의원","type":"한의원","healthCheck":false,"lat":37.325624,"lng":127.940783},{"name":"보리한의원","type":"한의원","healthCheck":false,"lat":37.324568,"lng":127.958567},{"name":"명륜한의원","type":"한의원","healthCheck":false,"lat":37.332672,"lng":127.942155},{"name":"광동한의원","type":"한의원","healthCheck":false,"lat":37.34222,"lng":127.955059},{"name":"거북이한의원","type":"한의원","healthCheck":false,"lat":37.407983,"lng":127.955901},{"name":"당유위한의원","type":"한의원","healthCheck":false,"lat":37.331026,"lng":127.948453},{"name":"원주단구 오케이한의원","type":"한의원","healthCheck":false,"lat":37.321449,"lng":127.955308},{"name":"남송한의원","type":"한의원","healthCheck":false,"lat":37.321875,"lng":127.939455},{"name":"명성한의원","type":"한의원","healthCheck":false,"lat":37.356953,"lng":127.935532},{"name":"중국한의원","type":"한의원","healthCheck":false,"lat":37.330579,"lng":127.958677},{"name":"원주함소아한의원","type":"한의원","healthCheck":false,"lat":37.330791,"lng":127.94869},{"name":"만나한의원","type":"한의원","healthCheck":false,"lat":37.340844,"lng":127.939835},{"name":"장수뜸한의원","type":"한의원","healthCheck":false,"lat":37.331918,"lng":127.948554},{"name":"재생한의원","type":"한의원","healthCheck":false,"lat":37.321827,"lng":127.951968},{"name":"진제통한의원","type":"한의원","healthCheck":false,"lat":37.324592,"lng":127.981608}]};
+
+const map = L.map('map',{zoomControl:false}).setView([37.342,127.940],12);
+L.control.zoom({position:'topright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',
+  maxZoom:19
+}).addTo(map);
+
+DATA.schools.forEach(s=>{ if(s.level==='방송통신중') s.level='중학교'; });
+
+(function offsetOverlaps(){
+  const all = [...DATA.schools.map((s,i)=>({arr:'schools',i,lat:s.lat,lng:s.lng})),
+               ...DATA.medical.map((m,i)=>({arr:'medical',i,lat:m.lat,lng:m.lng}))];
+  const key = p => p.lat.toFixed(5)+','+p.lng.toFixed(5);
+  const groups = {};
+  all.forEach(p=>{ const k=key(p); (groups[k]=groups[k]||[]).push(p); });
+  Object.values(groups).forEach(pts=>{
+    if(pts.length<2) return;
+    const offset = 0.0003;
+    pts.forEach((p,i)=>{
+      const angle = (2*Math.PI*i)/pts.length;
+      const item = DATA[p.arr][p.i];
+      item.lat += offset*Math.cos(angle);
+      item.lng += offset*Math.sin(angle);
+    });
+  });
+})();
+
+const SCHOOL_COLORS = {'초등학교':'#2563eb','중학교':'#7c3aed'};
+const MED_COLORS = {
+  '상급종합병원':'#dc2626','종합병원':'#dc2626',
+  '병원':'#f97316','정신병원':'#a855f7','요양병원':'#a855f7',
+  '의원':'#f97316',
+  '치과병원':'#059669','치과의원':'#059669',
+  '한방병원':'#d97706','한의원':'#d97706'
+};
+const MED_SIZES = {
+  '상급종합병원':20,'종합병원':20,
+  '병원':16,'정신병원':14,'요양병원':14,
+  '의원':14,
+  '치과병원':16,'치과의원':14,
+  '한방병원':16,'한의원':14
+};
+const MED_GROUPS = {
+  '종합/상급종합병원':['상급종합병원','종합병원'],
+  '병원/의원':['병원','의원'],
+  '정신/요양병원':['정신병원','요양병원'],
+  '치과':['치과병원','치과의원'],
+  '한방':['한방병원','한의원']
+};
+
+function makeIcon(color, size){
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:${size}px;height:${size}px;background:${color};border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
+    iconSize:[size,size],iconAnchor:[size/2,size/2]
+  });
+}
+function makeSchoolIcon(level){
+  const color = SCHOOL_COLORS[level]||'#2563eb';
+  const emoji = level==='초등학교' ? '🏫' : '🎓';
+  return L.divIcon({
+    className:'',
+    html:`<div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.35);font-size:16px;line-height:1">${emoji}</div>`,
+    iconSize:[28,28],iconAnchor:[14,14]
+  });
+}
+
+const schoolLevels = [...new Set(DATA.schools.map(s=>s.level))];
+const medTypes = [...new Set(DATA.medical.map(m=>m.type))];
+
+const schoolFiltersEl = document.getElementById('school-filters');
+schoolLevels.forEach(lv=>{
+  const lb = document.createElement('label');
+  lb.innerHTML = `<input type="checkbox" checked data-school-level="${lv}"> ${lv}`;
+  schoolFiltersEl.appendChild(lb);
+});
+
+const medFiltersEl = document.getElementById('med-filters');
+Object.entries(MED_GROUPS).forEach(([group, types])=>{
+  const lb = document.createElement('label');
+  lb.innerHTML = `<input type="checkbox" checked data-med-group="${group}"> ${group}`;
+  medFiltersEl.appendChild(lb);
+});
+
+let schoolMarkers = [];
+let medMarkers = [];
+let activeLines = [];
+let activeCircles = [];
+let selectedSchool = null;
+let labelMarkers = [];
+
+function getVisibleMedTypes(){
+  const checked = new Set();
+  document.querySelectorAll('[data-med-group]:checked').forEach(cb=>{
+    const g = cb.dataset.medGroup;
+    MED_GROUPS[g].forEach(t=>checked.add(t));
+  });
+  return checked;
+}
+function getVisibleSchoolLevels(){
+  const checked = new Set();
+  document.querySelectorAll('[data-school-level]:checked').forEach(cb=>{
+    checked.add(cb.dataset.schoolLevel);
+  });
+  return checked;
+}
+
+function renderMarkers(){
+  schoolMarkers.forEach(m=>map.removeLayer(m));
+  medMarkers.forEach(m=>map.removeLayer(m));
+  schoolMarkers = [];
+  medMarkers = [];
+
+  const visLevels = getVisibleSchoolLevels();
+  const visTypes = getVisibleMedTypes();
+  const hcOnly = document.getElementById('healthCheckOnly').checked;
+
+  DATA.schools.forEach((s,i)=>{
+    if(!visLevels.has(s.level)) return;
+    const m = L.marker([s.lat,s.lng],{icon:makeSchoolIcon(s.level)})
+      .addTo(map);
+    m._schoolIdx = i;
+    m.on('click',()=>selectSchool(i));
+    m.bindTooltip(s.name,{direction:'top',offset:[0,-8]});
+    schoolMarkers.push(m);
+  });
+
+  DATA.medical.forEach((med,i)=>{
+    if(!visTypes.has(med.type)) return;
+    if(hcOnly && !med.healthCheck) return;
+    const m = L.marker([med.lat,med.lng],{icon:makeIcon(MED_COLORS[med.type]||'#f97316',MED_SIZES[med.type]||8)})
+      .addTo(map);
+    m._medIdx = i;
+    m.bindTooltip(med.name,{direction:'top',offset:[0,-6]});
+    medMarkers.push(m);
+  });
+
+  updateCounts();
+}
+
+function updateCounts(){
+  const row = document.getElementById('count-row');
+  row.innerHTML = `
+    <span><span class="dot" style="background:#2563eb"></span> 학교 ${schoolMarkers.length}개</span>
+    <span><span class="dot" style="background:#ea580c"></span> 의료기관 ${medMarkers.length}개</span>
+  `;
+}
+
+function clearSelection(){
+  activeLines.forEach(l=>map.removeLayer(l));
+  activeCircles.forEach(c=>map.removeLayer(c));
+  labelMarkers.forEach(m=>map.removeLayer(m));
+  activeLines = [];
+  activeCircles = [];
+  labelMarkers = [];
+  selectedSchool = null;
+  document.getElementById('result-header').style.display = 'none';
+  document.getElementById('result-list').innerHTML = '';
+  document.getElementById('empty-msg').style.display = '';
+}
+
+function haversine(lat1,lng1,lat2,lng2){
+  const from = turf.point([lng1,lat1]);
+  const to = turf.point([lng2,lat2]);
+  return turf.distance(from,to,{units:'kilometers'});
+}
+
+function selectSchool(idx){
+  clearSelection();
+  selectedSchool = idx;
+  const school = DATA.schools[idx];
+
+  const visTypes = getVisibleMedTypes();
+  const hcOnly = document.getElementById('healthCheckOnly').checked;
+
+  let dists = [];
+  DATA.medical.forEach((med,i)=>{
+    if(!visTypes.has(med.type)) return;
+    if(hcOnly && !med.healthCheck) return;
+    const d = haversine(school.lat,school.lng,med.lat,med.lng);
+    dists.push({idx:i,dist:d,...med});
+  });
+  dists.sort((a,b)=>a.dist-b.dist);
+
+  const topNVal = document.getElementById('topN').value;
+  const showDists = topNVal === 'all' ? dists : dists.slice(0, parseInt(topNVal));
+
+  if(document.getElementById('show3km').checked){
+    const c = L.circle([school.lat,school.lng],{radius:3000,color:'#f59e0b',weight:2.5,fillColor:'#f59e0b',fillOpacity:0.08,dashArray:'8 6'}).addTo(map);
+    activeCircles.push(c);
+  }
+  if(document.getElementById('show1km').checked){
+    const c = L.circle([school.lat,school.lng],{radius:1000,color:'#3b82f6',weight:2.5,fillColor:'#3b82f6',fillOpacity:0.1,dashArray:'8 6'}).addTo(map);
+    activeCircles.push(c);
+  }
+
+  const colors = ['#dc2626','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#6366f1','#f43f5e'];
+
+  showDists.forEach((item,rank)=>{
+    const lineColor = colors[rank % colors.length];
+    const line = L.polyline(
+      [[school.lat,school.lng],[item.lat,item.lng]],
+      {color:lineColor,weight:2.5,opacity:0.8,dashArray:'6 4'}
+    ).addTo(map);
+    activeLines.push(line);
+
+    const midLat = (school.lat+item.lat)/2;
+    const midLng = (school.lng+item.lng)/2;
+    const distText = item.dist < 1 ? (item.dist*1000).toFixed(0)+'m' : item.dist.toFixed(2)+'km';
+    const label = L.marker([midLat,midLng],{
+      icon:L.divIcon({
+        className:'dist-label',
+        html:`<span style="background:rgba(255,255,255,.95);padding:2px 6px;border-radius:4px;font-size:12px;color:#333;font-weight:700;white-space:nowrap;border:1.5px solid ${lineColor};box-shadow:0 1px 3px rgba(0,0,0,.2);pointer-events:none">${distText}</span>`,
+        iconSize:[0,0],iconAnchor:[0,0]
+      }),
+      interactive:false,
+      zIndexOffset:1000
+    }).addTo(map);
+    labelMarkers.push(label);
+  });
+
+  document.getElementById('empty-msg').style.display = 'none';
+  const hdr = document.getElementById('result-header');
+  hdr.style.display = '';
+  hdr.textContent = `${school.name} → 의료기관 (${showDists.length}개)`;
+
+  const list = document.getElementById('result-list');
+  list.innerHTML = '';
+  showDists.forEach((item,rank)=>{
+    const li = document.createElement('li');
+    li.className = 'result-item';
+    li.innerHTML = `
+      <span class="result-name">${rank+1}. ${item.name}</span>
+      <span class="result-type">${item.type}</span>
+      <span class="result-dist">${item.dist.toFixed(2)} km</span>
+    `;
+    li.addEventListener('click',()=>{
+      map.flyTo([item.lat,item.lng],15,{duration:0.5});
+    });
+    li.addEventListener('mouseenter',()=>{
+      if(activeLines[rank]) activeLines[rank].setStyle({weight:5,opacity:1});
+    });
+    li.addEventListener('mouseleave',()=>{
+      if(activeLines[rank]) activeLines[rank].setStyle({weight:2.5,opacity:0.8});
+    });
+    list.appendChild(li);
+  });
+
+  const bounds = L.latLngBounds([[school.lat,school.lng]]);
+  showDists.slice(0,5).forEach(item=>{
+    bounds.extend([item.lat,item.lng]);
+  });
+  map.flyToBounds(bounds.pad(0.3),{duration:0.5});
+}
+
+document.querySelectorAll('[data-school-level],[data-med-group],#healthCheckOnly').forEach(cb=>{
+  cb.addEventListener('change',()=>{
+    renderMarkers();
+    if(selectedSchool !== null) selectSchool(selectedSchool);
+  });
+});
+document.getElementById('topN').addEventListener('change',()=>{
+  if(selectedSchool !== null) selectSchool(selectedSchool);
+});
+document.getElementById('show1km').addEventListener('change',()=>{
+  if(selectedSchool !== null) selectSchool(selectedSchool);
+});
+document.getElementById('show3km').addEventListener('change',()=>{
+  if(selectedSchool !== null) selectSchool(selectedSchool);
+});
+
+map.on('click',(e)=>{
+  if(!e.originalEvent.target.closest('.leaflet-marker-icon')) clearSelection();
+});
+
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  sb.classList.toggle('collapsed');
+  setTimeout(()=>map.invalidateSize(),350);
+}
+
+renderMarkers();
+
+const searchInput = document.getElementById('searchInput');
+const searchResults = document.getElementById('searchResults');
+
+function doSearch(query){
+  searchResults.innerHTML = '';
+  if(!query || query.length < 1){searchResults.style.display='none';return;}
+  const q = query.toLowerCase();
+  const matches = [];
+
+  DATA.schools.forEach((s,i)=>{
+    if(s.name.toLowerCase().includes(q)){
+      matches.push({name:s.name, tag:s.level, tagColor:SCHOOL_COLORS[s.level]||'#2563eb', type:'school', idx:i, lat:s.lat, lng:s.lng});
+    }
+  });
+  DATA.medical.forEach((m,i)=>{
+    if(m.name.toLowerCase().includes(q)){
+      matches.push({name:m.name, tag:m.type, tagColor:MED_COLORS[m.type]||'#f97316', type:'medical', idx:i, lat:m.lat, lng:m.lng});
+    }
+  });
+
+  if(matches.length===0){
+    searchResults.innerHTML='<li style="color:#aaa;pointer-events:none">검색 결과 없음</li>';
+    searchResults.style.display='block';
+    return;
+  }
+
+  matches.slice(0,20).forEach(item=>{
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${item.name}</span><span class="sr-tag" style="background:${item.tagColor}">${item.tag}</span>`;
+    li.addEventListener('click',()=>{
+      searchResults.style.display='none';
+      searchInput.value = item.name;
+      map.flyTo([item.lat,item.lng],16,{duration:0.5});
+      if(item.type==='school') selectSchool(item.idx);
+    });
+    searchResults.appendChild(li);
+  });
+  if(matches.length>20){
+    searchResults.innerHTML += `<li style="color:#aaa;pointer-events:none;font-size:12px">외 ${matches.length-20}건 더...</li>`;
+  }
+  searchResults.style.display='block';
+}
+
+searchInput.addEventListener('input',(e)=>doSearch(e.target.value.trim()));
+searchInput.addEventListener('focus',()=>{if(searchInput.value.trim()) doSearch(searchInput.value.trim());});
+document.addEventListener('click',(e)=>{
+  if(!e.target.closest('.search-box')) searchResults.style.display='none';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+data/
+map_data.json
+convert_data.py
+start_server.bat
+__pycache__/
+*.pyc
