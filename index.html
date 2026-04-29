@@ -295,8 +295,7 @@ function selectSchool(idx){
 
   document.getElementById('empty-msg').style.display='none';
   const hdr=document.getElementById('result-header');hdr.style.display='';
-  const rSummary=getRadiusSummary(school);
-  hdr.innerHTML=`<div>${school.name} → 의료기관 (${showDists.length}개)</div><div style="font-weight:400;font-size:12px;margin-top:6px;padding:8px;background:#f8fafc;border-radius:6px">${radiusSummaryHTML(rSummary)}</div>`;
+  hdr.textContent=`${school.name} → 가까운 의료기관 (${showDists.length}개)`;
   const list=document.getElementById('result-list');list.innerHTML='';
   showDists.forEach((item,rank)=>{
     const li=document.createElement('li');li.className='result-item';
@@ -306,6 +305,11 @@ function selectSchool(idx){
     li.addEventListener('mouseleave',()=>{if(activeLines[rank])activeLines[rank].setStyle({weight:2.5,opacity:0.8});});
     list.appendChild(li);
   });
+  const rSummary=getRadiusSummary(school);
+  const summaryLi=document.createElement('li');
+  summaryLi.style.cssText='padding:14px 20px;border-top:2px solid #eee;background:#f8fafc';
+  summaryLi.innerHTML=`<div style="font-size:13px;font-weight:600;color:#333;margin-bottom:4px">📊 반경 내 전체 의료기관 현황</div>${radiusSummaryHTML(rSummary)}`;
+  list.appendChild(summaryLi);
   const bounds=L.latLngBounds([[school.lat,school.lng]]);
   showDists.slice(0,5).forEach(item=>bounds.extend([item.lat,item.lng]));
   map.flyToBounds(bounds.pad(0.3),{duration:0.5});
