@@ -22,7 +22,6 @@
 ## 배포 링크
 
 - **접근성 지도**: https://changminim.github.io/wonju-school-medical-map/
-- **2SFCA 분석**: https://changminim.github.io/wonju-school-medical-map/2sfca/
 
 ## 기술 스택
 
