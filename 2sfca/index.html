@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2SFCA 접근성 분석 - 용인시 초등학생</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="result.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh;overflow:hidden}
+#map{flex:1;z-index:0}
+#panel{width:340px;min-width:340px;background:#fff;border-left:1px solid #ddd;display:flex;flex-direction:column;overflow-y:auto;z-index:1}
+.panel-header{padding:16px 20px;border-bottom:1px solid #eee}
+.panel-header h1{font-size:16px;color:#1e293b;margin-bottom:4px}
+.panel-header p{font-size:12px;color:#64748b}
+.control-section{padding:14px 20px;border-bottom:1px solid #eee}
+.control-section h3{font-size:13px;color:#475569;margin-bottom:8px;font-weight:600}
+.radio-group{display:flex;flex-direction:column;gap:6px}
+.radio-group label{font-size:12px;color:#334155;cursor:pointer;display:flex;align-items:center;gap:6px}
+.radio-group input{accent-color:#4a90d9}
+.btn-group{display:flex;gap:4px;flex-wrap:wrap}
+.btn-toggle{padding:6px 12px;font-size:12px;border:1px solid #cbd5e1;border-radius:5px;background:#fff;cursor:pointer;transition:all .15s;color:#475569;font-weight:500}
+.btn-toggle.active{background:#4a90d9;color:#fff;border-color:#4a90d9}
+.stat-section{padding:14px 20px;border-bottom:1px solid #eee}
+.stat-section h3{font-size:13px;color:#475569;margin-bottom:8px;font-weight:600}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-card{background:#f8fafc;border-radius:6px;padding:10px 12px;text-align:center}
+.stat-card .val{font-size:18px;font-weight:700;color:#1e293b}
+.stat-card .lbl{font-size:11px;color:#64748b;margin-top:2px}
+.legend-bar{padding:14px 20px}
+.legend-bar h3{font-size:13px;color:#475569;margin-bottom:8px;font-weight:600}
+.gradient-bar{height:16px;border-radius:4px;margin-bottom:4px}
+.gradient-labels{display:flex;justify-content:space-between;font-size:11px;color:#64748b}
+.info-note{padding:14px 20px;font-size:11px;color:#94a3b8;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <div class="panel-header">
+    <h1>2SFCA 의료 접근성 분석</h1>
+    <p>용인시 초등학생 인구 · 500m 격자</p>
+  </div>
+  <div class="control-section">
+    <h3>분석 방법</h3>
+    <div class="btn-group" id="method-btns">
+      <button class="btn-toggle active" data-val="2sfca">2SFCA</button>
+      <button class="btn-toggle" data-val="e2sfca">E2SFCA (Gaussian)</button>
+    </div>
+  </div>
+  <div class="control-section">
+    <h3>Catchment 거리</h3>
+    <div class="btn-group" id="catchment-btns">
+      <button class="btn-toggle" data-val="1000">1 km</button>
+      <button class="btn-toggle active" data-val="3000">3 km</button>
+      <button class="btn-toggle" data-val="5000">5 km</button>
+    </div>
+  </div>
+  <div class="control-section">
+    <h3>공급량 기준</h3>
+    <div class="btn-group" id="metric-btns">
+      <button class="btn-toggle" data-val="ped">소아청소년과</button>
+      <button class="btn-toggle" data-val="inter">내과</button>
+      <button class="btn-toggle active" data-val="ped_inter">소아+내과</button>
+      <button class="btn-toggle" data-val="count">기관 수</button>
+    </div>
+  </div>
+  <div class="stat-section">
+    <h3>현재 결과 통계</h3>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="val" id="stat-max">-</div><div class="lbl">최댓값</div></div>
+      <div class="stat-card"><div class="val" id="stat-mean">-</div><div class="lbl">평균</div></div>
+      <div class="stat-card"><div class="val" id="stat-median">-</div><div class="lbl">중앙값</div></div>
+      <div class="stat-card"><div class="val" id="stat-zero">-</div><div class="lbl">접근불가 격자</div></div>
+    </div>
+  </div>
+  <div class="legend-bar">
+    <h3>접근성 지수</h3>
+    <div class="gradient-bar" id="gradient-bar"></div>
+    <div class="gradient-labels"><span id="leg-min">0</span><span id="leg-max">-</span></div>
+  </div>
+  <div class="info-note">
+    <strong>2SFCA</strong>: 임계거리 내 이진(포함/미포함) 가중<br>
+    <strong>E2SFCA</strong>: Gaussian 거리감쇠 함수 적용<br><br>
+    격자 색상이 진할수록 의료 접근성이 높음. 회색 격자는 초등학생 인구가 있으나 catchment 내 공급이 없는 지역.
+  </div>
+</div>
+<script>
+const map = L.map('map',{zoomControl:false}).setView([37.28,127.10],12);
+L.control.zoom({position:'topright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; OpenStreetMap',maxZoom:19
+}).addTo(map);
+
+let currentMethod='2sfca', currentCatchment='3000', currentMetric='ped_inter';
+let geoLayer=null;
+
+const COLORS = ['#f7fbff','#deebf7','#c6dbef','#9ecae1','#6baed6','#4292c6','#2171b5','#08519c','#08306b'];
+
+function getKey(){return `${currentMethod}_${currentMetric}_${currentCatchment}`;}
+
+function getColorScale(values){
+  const nonZero=values.filter(v=>v>0);
+  if(!nonZero.length) return {max:0, getColor:()=>'#e2e8f0'};
+  const sorted=[...nonZero].sort((a,b)=>a-b);
+  const max=sorted[Math.floor(sorted.length*0.98)];
+  return {
+    max,
+    getColor(v){
+      if(v<=0) return '#e2e8f0';
+      const ratio=Math.min(v/max,1);
+      const idx=Math.min(Math.floor(ratio*(COLORS.length-1)),COLORS.length-1);
+      return COLORS[idx];
+    }
+  };
+}
+
+function updateMap(){
+  const key=getKey();
+  const values=SFCA_GEOJSON.features.map(f=>f.properties[key]||0);
+  const scale=getColorScale(values);
+
+  if(geoLayer) map.removeLayer(geoLayer);
+  geoLayer=L.geoJSON(SFCA_GEOJSON,{
+    style(feature){
+      const v=feature.properties[key]||0;
+      return {fillColor:scale.getColor(v),fillOpacity:0.75,weight:0.3,color:'#94a3b8',opacity:0.4};
+    },
+    onEachFeature(feature,layer){
+      const p=feature.properties;
+      const v=(p[key]||0);
+      layer.bindPopup(`<div style="font-size:13px"><strong>접근성 지수:</strong> ${v>0?v.toFixed(6):'0 (접근불가)'}<br><strong>초등학생 인구:</strong> ${p.pop}명</div>`);
+    }
+  }).addTo(map);
+
+  // Stats
+  const withPop=SFCA_GEOJSON.features.filter(f=>f.properties.pop>0);
+  const vals=withPop.map(f=>f.properties[key]||0);
+  const nonZero=vals.filter(v=>v>0);
+  const sorted=[...nonZero].sort((a,b)=>a-b);
+
+  document.getElementById('stat-max').textContent=nonZero.length?sorted[sorted.length-1].toFixed(4):'N/A';
+  document.getElementById('stat-mean').textContent=nonZero.length?(nonZero.reduce((a,b)=>a+b,0)/nonZero.length).toFixed(4):'N/A';
+  document.getElementById('stat-median').textContent=sorted.length?sorted[Math.floor(sorted.length/2)].toFixed(4):'N/A';
+  document.getElementById('stat-zero').textContent=`${vals.filter(v=>v<=0).length}개`;
+
+  // Legend
+  document.getElementById('gradient-bar').style.background=`linear-gradient(to right, ${COLORS.join(',')})`;
+  document.getElementById('leg-max').textContent=scale.max>0?scale.max.toFixed(4):'0';
+}
+
+function setupButtons(containerId, onChange){
+  const btns=document.querySelectorAll(`#${containerId} .btn-toggle`);
+  btns.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      btns.forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      onChange(btn.dataset.val);
+    });
+  });
+}
+
+setupButtons('method-btns',v=>{currentMethod=v;updateMap();});
+setupButtons('catchment-btns',v=>{currentCatchment=v;updateMap();});
+setupButtons('metric-btns',v=>{currentMetric=v;updateMap();});
+
+updateMap();
+</script>
+</body>
+</html>
