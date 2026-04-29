@@ -79,12 +79,14 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
   <div class="legend-bar">
     <h3>접근성 지수</h3>
     <div class="gradient-bar" id="gradient-bar"></div>
-    <div class="gradient-labels"><span id="leg-min">0</span><span id="leg-max">-</span></div>
+    <div class="gradient-labels"><span id="leg-min">0 (낮음)</span><span id="leg-max">1.0 (높음)</span></div>
   </div>
   <div class="info-note">
     <strong>2SFCA</strong>: 임계거리 내 이진(포함/미포함) 가중<br>
     <strong>E2SFCA</strong>: Gaussian 거리감쇠 함수 적용<br><br>
-    격자 색상이 진할수록 의료 접근성이 높음. 회색 격자는 초등학생 인구가 있으나 catchment 내 공급이 없는 지역.
+    접근성 지수는 0~1로 정규화 (min-max). 빨강=낮음, 초록=높음.<br>
+    회색 격자는 인구가 있으나 catchment 내 공급이 없는 지역.<br>
+    인구 0인 격자는 표시하지 않음.
   </div>
 </div>
 <script>
@@ -97,21 +99,27 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 let currentMethod='2sfca', currentCatchment='3000', currentMetric='ped_inter';
 let geoLayer=null;
 
-const COLORS = ['#f7fbff','#deebf7','#c6dbef','#9ecae1','#6baed6','#4292c6','#2171b5','#08519c','#08306b'];
+const COLORS = ['#d73027','#f46d43','#fdae61','#fee08b','#ffffbf','#d9ef8b','#a6d96a','#66bd63','#1a9850'];
 
 function getKey(){return `${currentMethod}_${currentMetric}_${currentCatchment}`;}
 
-function getColorScale(values){
+function normalizeValues(values){
   const nonZero=values.filter(v=>v>0);
-  if(!nonZero.length) return {max:0, getColor:()=>'#e2e8f0'};
-  const sorted=[...nonZero].sort((a,b)=>a-b);
-  const max=sorted[Math.floor(sorted.length*0.98)];
+  if(!nonZero.length) return values.map(()=>0);
+  const min=Math.min(...nonZero);
+  const max=nonZero.sort((a,b)=>a-b)[Math.floor(nonZero.length*0.98)];
+  if(max<=min) return values.map(v=>v>0?1:0);
+  return values.map(v=>{
+    if(v<=0) return 0;
+    return Math.min((v-min)/(max-min),1);
+  });
+}
+
+function getColorScale(){
   return {
-    max,
-    getColor(v){
-      if(v<=0) return '#e2e8f0';
-      const ratio=Math.min(v/max,1);
-      const idx=Math.min(Math.floor(ratio*(COLORS.length-1)),COLORS.length-1);
+    getColor(norm){
+      if(norm<=0) return '#d4d4d4';
+      const idx=Math.min(Math.floor(norm*(COLORS.length-1)),COLORS.length-1);
       return COLORS[idx];
     }
   };
@@ -119,36 +127,41 @@ function getColorScale(values){
 
 function updateMap(){
   const key=getKey();
-  const values=SFCA_GEOJSON.features.map(f=>f.properties[key]||0);
-  const scale=getColorScale(values);
+  const popFeatures=SFCA_GEOJSON.features.filter(f=>f.properties.pop>0);
+  const rawValues=popFeatures.map(f=>f.properties[key]||0);
+  const normValues=normalizeValues(rawValues);
+  const normMap=new Map();
+  popFeatures.forEach((f,i)=>normMap.set(f.properties.id, {norm:normValues[i], raw:rawValues[i]}));
+  const scale=getColorScale();
 
   if(geoLayer) map.removeLayer(geoLayer);
-  geoLayer=L.geoJSON(SFCA_GEOJSON,{
+  const filteredGeoJSON={type:'FeatureCollection', features:popFeatures};
+  geoLayer=L.geoJSON(filteredGeoJSON,{
     style(feature){
-      const v=feature.properties[key]||0;
-      return {fillColor:scale.getColor(v),fillOpacity:0.75,weight:0.3,color:'#94a3b8',opacity:0.4};
+      const info=normMap.get(feature.properties.id)||{norm:0};
+      return {fillColor:scale.getColor(info.norm),fillOpacity:0.8,weight:0.3,color:'#fff',opacity:0.5};
     },
     onEachFeature(feature,layer){
       const p=feature.properties;
-      const v=(p[key]||0);
-      layer.bindPopup(`<div style="font-size:13px"><strong>접근성 지수:</strong> ${v>0?v.toFixed(6):'0 (접근불가)'}<br><strong>초등학생 인구:</strong> ${p.pop}명</div>`);
+      const info=normMap.get(p.id)||{norm:0,raw:0};
+      const normText=info.norm>0?info.norm.toFixed(3):'0';
+      const rawText=info.raw>0?info.raw.toFixed(6):'0';
+      layer.bindPopup(`<div style="font-size:13px"><strong>접근성 지수:</strong> ${normText} ${info.norm<=0?'(접근불가)':''}<br><strong>원본값:</strong> ${rawText}<br><strong>초등학생 인구:</strong> ${p.pop}명</div>`);
     }
   }).addTo(map);
 
-  // Stats
-  const withPop=SFCA_GEOJSON.features.filter(f=>f.properties.pop>0);
-  const vals=withPop.map(f=>f.properties[key]||0);
-  const nonZero=vals.filter(v=>v>0);
-  const sorted=[...nonZero].sort((a,b)=>a-b);
+  // Stats (on normalized values)
+  const nonZeroNorm=normValues.filter(v=>v>0);
+  const sortedNorm=[...nonZeroNorm].sort((a,b)=>a-b);
 
-  document.getElementById('stat-max').textContent=nonZero.length?sorted[sorted.length-1].toFixed(4):'N/A';
-  document.getElementById('stat-mean').textContent=nonZero.length?(nonZero.reduce((a,b)=>a+b,0)/nonZero.length).toFixed(4):'N/A';
-  document.getElementById('stat-median').textContent=sorted.length?sorted[Math.floor(sorted.length/2)].toFixed(4):'N/A';
-  document.getElementById('stat-zero').textContent=`${vals.filter(v=>v<=0).length}개`;
+  document.getElementById('stat-max').textContent=nonZeroNorm.length?'1.000':'N/A';
+  document.getElementById('stat-mean').textContent=nonZeroNorm.length?(nonZeroNorm.reduce((a,b)=>a+b,0)/nonZeroNorm.length).toFixed(3):'N/A';
+  document.getElementById('stat-median').textContent=sortedNorm.length?sortedNorm[Math.floor(sortedNorm.length/2)].toFixed(3):'N/A';
+  document.getElementById('stat-zero').textContent=`${rawValues.filter(v=>v<=0).length} / ${popFeatures.length}`;
 
   // Legend
   document.getElementById('gradient-bar').style.background=`linear-gradient(to right, ${COLORS.join(',')})`;
-  document.getElementById('leg-max').textContent=scale.max>0?scale.max.toFixed(4):'0';
+  document.getElementById('leg-max').textContent='1.0';
 }
 
 function setupButtons(containerId, onChange){
