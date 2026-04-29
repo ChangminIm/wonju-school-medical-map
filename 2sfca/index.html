@@ -7,33 +7,36 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="result.js"></script>
+<script src="boundary.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh;overflow:hidden}
 #map{flex:1;z-index:0}
-#panel{width:340px;min-width:340px;background:#fff;border-left:1px solid #ddd;display:flex;flex-direction:column;overflow-y:auto;z-index:1}
+#panel{width:360px;min-width:360px;background:#fff;border-left:1px solid #ddd;display:flex;flex-direction:column;overflow-y:auto;z-index:1}
 .panel-header{padding:16px 20px;border-bottom:1px solid #eee}
 .panel-header h1{font-size:16px;color:#1e293b;margin-bottom:4px}
 .panel-header p{font-size:12px;color:#64748b}
-.control-section{padding:14px 20px;border-bottom:1px solid #eee}
+.control-section{padding:12px 20px;border-bottom:1px solid #eee}
 .control-section h3{font-size:13px;color:#475569;margin-bottom:8px;font-weight:600}
-.radio-group{display:flex;flex-direction:column;gap:6px}
-.radio-group label{font-size:12px;color:#334155;cursor:pointer;display:flex;align-items:center;gap:6px}
-.radio-group input{accent-color:#4a90d9}
 .btn-group{display:flex;gap:4px;flex-wrap:wrap}
 .btn-toggle{padding:6px 12px;font-size:12px;border:1px solid #cbd5e1;border-radius:5px;background:#fff;cursor:pointer;transition:all .15s;color:#475569;font-weight:500}
 .btn-toggle.active{background:#4a90d9;color:#fff;border-color:#4a90d9}
-.stat-section{padding:14px 20px;border-bottom:1px solid #eee}
+.btn-toggle.active-orange{background:#ea580c;color:#fff;border-color:#ea580c}
+.btn-toggle.active-green{background:#16a34a;color:#fff;border-color:#16a34a}
+.stat-section{padding:12px 20px;border-bottom:1px solid #eee}
 .stat-section h3{font-size:13px;color:#475569;margin-bottom:8px;font-weight:600}
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .stat-card{background:#f8fafc;border-radius:6px;padding:10px 12px;text-align:center}
 .stat-card .val{font-size:18px;font-weight:700;color:#1e293b}
 .stat-card .lbl{font-size:11px;color:#64748b;margin-top:2px}
-.legend-bar{padding:14px 20px}
+.legend-bar{padding:12px 20px;border-bottom:1px solid #eee}
 .legend-bar h3{font-size:13px;color:#475569;margin-bottom:8px;font-weight:600}
 .gradient-bar{height:16px;border-radius:4px;margin-bottom:4px}
 .gradient-labels{display:flex;justify-content:space-between;font-size:11px;color:#64748b}
-.info-note{padding:14px 20px;font-size:11px;color:#94a3b8;line-height:1.5}
+.legend-items{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:#64748b}
+.legend-swatch{width:14px;height:14px;border-radius:2px;border:1px solid #ccc;flex-shrink:0}
+.info-note{padding:12px 20px;font-size:11px;color:#94a3b8;line-height:1.5}
 </style>
 </head>
 <body>
@@ -41,7 +44,15 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
 <div id="panel">
   <div class="panel-header">
     <h1>2SFCA 의료 접근성 분석</h1>
-    <p>용인시 초등학생 인구 · 500m 격자</p>
+    <p>용인시 초등학생 인구 · 500m 격자 · <span id="grid-info"></span></p>
+  </div>
+  <div class="control-section">
+    <h3>표시 레이어</h3>
+    <div class="btn-group" id="layer-btns">
+      <button class="btn-toggle active" data-val="sfca">접근성 지수</button>
+      <button class="btn-toggle" data-val="kde">KDE 밀도</button>
+      <button class="btn-toggle" data-val="gi">Gi* 핫스팟</button>
+    </div>
   </div>
   <div class="control-section">
     <h3>분석 방법</h3>
@@ -68,116 +79,157 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
     </div>
   </div>
   <div class="stat-section">
-    <h3>현재 결과 통계</h3>
+    <h3>통계 요약</h3>
     <div class="stat-grid">
       <div class="stat-card"><div class="val" id="stat-max">-</div><div class="lbl">최댓값</div></div>
       <div class="stat-card"><div class="val" id="stat-mean">-</div><div class="lbl">평균</div></div>
       <div class="stat-card"><div class="val" id="stat-median">-</div><div class="lbl">중앙값</div></div>
-      <div class="stat-card"><div class="val" id="stat-zero">-</div><div class="lbl">접근불가 격자</div></div>
+      <div class="stat-card"><div class="val" id="stat-zero">-</div><div class="lbl">접근불가</div></div>
     </div>
   </div>
-  <div class="legend-bar">
-    <h3>접근성 지수</h3>
+  <div class="legend-bar" id="legend-section">
+    <h3 id="legend-title">접근성 지수</h3>
     <div class="gradient-bar" id="gradient-bar"></div>
-    <div class="gradient-labels"><span id="leg-min">0 (낮음)</span><span id="leg-max">1.0 (높음)</span></div>
+    <div class="gradient-labels"><span id="leg-min">0</span><span id="leg-max">1.0</span></div>
+    <div class="legend-items" id="legend-items"></div>
   </div>
   <div class="info-note">
-    <strong>2SFCA</strong>: 임계거리 내 이진(포함/미포함) 가중<br>
-    <strong>E2SFCA</strong>: Gaussian 거리감쇠 함수 적용<br><br>
-    접근성 지수는 0~1로 정규화 (min-max). 빨강=낮음, 초록=높음.<br>
-    회색 격자는 인구가 있으나 catchment 내 공급이 없는 지역.<br>
-    인구 0인 격자는 표시하지 않음.
+    <strong>2SFCA</strong>: 임계거리 내 이진 가중<br>
+    <strong>E2SFCA</strong>: Gaussian 거리감쇠 함수 적용<br>
+    <strong>KDE</strong>: 접근성 값 기반 커널밀도추정<br>
+    <strong>Gi*</strong>: Getis-Ord 핫/콜드스팟 (KNN k=8, p&lt;0.05)<br><br>
+    인구 0인 격자는 표시하지 않음. 접근성 지수는 0~1로 정규화.
   </div>
 </div>
 <script>
-const map = L.map('map',{zoomControl:false}).setView([37.28,127.10],12);
+const map=L.map('map',{zoomControl:false}).setView([37.28,127.10],12);
 L.control.zoom({position:'topright'}).addTo(map);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  attribution:'&copy; OpenStreetMap',maxZoom:19
-}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);
 
-let currentMethod='2sfca', currentCatchment='3000', currentMetric='ped_inter';
+L.geoJSON(YONGIN_BOUNDARY,{style:{fill:false,color:'#334155',weight:2.5,opacity:0.7,dashArray:'6 4'}}).addTo(map);
+
+document.getElementById('grid-info').textContent=`${SFCA_META.grid_count}개 격자 (전체 ${SFCA_META.grid_total})`;
+
+let currentLayer='sfca',currentMethod='2sfca',currentCatchment='3000',currentMetric='ped_inter';
 let geoLayer=null;
 
-const COLORS = ['#d73027','#f46d43','#fdae61','#fee08b','#ffffbf','#d9ef8b','#a6d96a','#66bd63','#1a9850'];
+const BLUE9=['#f7fbff','#deebf7','#c6dbef','#9ecae1','#6baed6','#4292c6','#2171b5','#08519c','#08306b'];
+const ORANGE9=['#fff5eb','#fee6ce','#fdd0a2','#fdae6b','#fd8d3c','#f16913','#d94801','#a63603','#7f2704'];
+const GI_COLORS={hotspot:'#dc2626',cold:'#2563eb',notSig:'#e2e8f0'};
 
-function getKey(){return `${currentMethod}_${currentMetric}_${currentCatchment}`;}
+function sfcaKey(){return `${currentMethod}_${currentMetric}_${currentCatchment}`;}
+function kdeKey(){return `kde_${currentMethod}_${currentMetric}_${currentCatchment}`;}
+function giKey(){return `gi_${currentMethod}_${currentMetric}_${currentCatchment}`;}
+function gipKey(){return `gip_${currentMethod}_${currentMetric}_${currentCatchment}`;}
 
-function normalizeValues(values){
-  const nonZero=values.filter(v=>v>0);
-  if(!nonZero.length) return values.map(()=>0);
-  const min=Math.min(...nonZero);
-  const max=nonZero.sort((a,b)=>a-b)[Math.floor(nonZero.length*0.98)];
-  if(max<=min) return values.map(v=>v>0?1:0);
-  return values.map(v=>{
-    if(v<=0) return 0;
-    return Math.min((v-min)/(max-min),1);
-  });
+function normalize(values){
+  const nz=values.filter(v=>v>0);
+  if(!nz.length)return values.map(()=>0);
+  const mn=Math.min(...nz), mx=nz.sort((a,b)=>a-b)[Math.floor(nz.length*0.98)];
+  if(mx<=mn)return values.map(v=>v>0?1:0);
+  return values.map(v=>v<=0?0:Math.min((v-mn)/(mx-mn),1));
 }
 
-function getColorScale(){
-  return {
-    getColor(norm){
-      if(norm<=0) return '#d4d4d4';
-      const idx=Math.min(Math.floor(norm*(COLORS.length-1)),COLORS.length-1);
-      return COLORS[idx];
-    }
-  };
+function colorFromPalette(norm,palette){
+  if(norm<=0)return '#e2e8f0';
+  const idx=Math.min(Math.floor(norm*(palette.length-1)),palette.length-1);
+  return palette[idx];
 }
 
 function updateMap(){
-  const key=getKey();
-  const popFeatures=SFCA_GEOJSON.features.filter(f=>f.properties.pop>0);
-  const rawValues=popFeatures.map(f=>f.properties[key]||0);
-  const normValues=normalizeValues(rawValues);
-  const normMap=new Map();
-  popFeatures.forEach((f,i)=>normMap.set(f.properties.id, {norm:normValues[i], raw:rawValues[i]}));
-  const scale=getColorScale();
+  if(geoLayer)map.removeLayer(geoLayer);
+  const features=SFCA_GEOJSON.features;
 
-  if(geoLayer) map.removeLayer(geoLayer);
-  const filteredGeoJSON={type:'FeatureCollection', features:popFeatures};
-  geoLayer=L.geoJSON(filteredGeoJSON,{
-    style(feature){
-      const info=normMap.get(feature.properties.id)||{norm:0};
-      return {fillColor:scale.getColor(info.norm),fillOpacity:0.8,weight:0.3,color:'#fff',opacity:0.5};
-    },
-    onEachFeature(feature,layer){
-      const p=feature.properties;
-      const info=normMap.get(p.id)||{norm:0,raw:0};
-      const normText=info.norm>0?info.norm.toFixed(3):'0';
-      const rawText=info.raw>0?info.raw.toFixed(6):'0';
-      layer.bindPopup(`<div style="font-size:13px"><strong>접근성 지수:</strong> ${normText} ${info.norm<=0?'(접근불가)':''}<br><strong>원본값:</strong> ${rawText}<br><strong>초등학생 인구:</strong> ${p.pop}명</div>`);
-    }
-  }).addTo(map);
-
-  // Stats (on normalized values)
-  const nonZeroNorm=normValues.filter(v=>v>0);
-  const sortedNorm=[...nonZeroNorm].sort((a,b)=>a-b);
-
-  document.getElementById('stat-max').textContent=nonZeroNorm.length?'1.000':'N/A';
-  document.getElementById('stat-mean').textContent=nonZeroNorm.length?(nonZeroNorm.reduce((a,b)=>a+b,0)/nonZeroNorm.length).toFixed(3):'N/A';
-  document.getElementById('stat-median').textContent=sortedNorm.length?sortedNorm[Math.floor(sortedNorm.length/2)].toFixed(3):'N/A';
-  document.getElementById('stat-zero').textContent=`${rawValues.filter(v=>v<=0).length} / ${popFeatures.length}`;
-
-  // Legend
-  document.getElementById('gradient-bar').style.background=`linear-gradient(to right, ${COLORS.join(',')})`;
-  document.getElementById('leg-max').textContent='1.0';
+  if(currentLayer==='sfca'){
+    const raw=features.map(f=>f.properties[sfcaKey()]||0);
+    const norm=normalize(raw);
+    geoLayer=L.geoJSON(SFCA_GEOJSON,{
+      style(f){const n=norm[features.indexOf(f)];return{fillColor:colorFromPalette(n,BLUE9),fillOpacity:0.8,weight:0.3,color:'#fff',opacity:0.5};},
+      onEachFeature(f,layer){const p=f.properties;const i=features.indexOf(f);const n=norm[i];const r=raw[i];
+        layer.bindPopup(`<div style="font-size:13px"><b>접근성:</b> ${n.toFixed(3)} (원본: ${r>0?r.toFixed(6):'0'})<br><b>인구:</b> ${p.pop}명</div>`);}
+    }).addTo(map);
+    updateStats(raw,norm,'접근성 지수',BLUE9);
+  }
+  else if(currentLayer==='kde'){
+    const raw=features.map(f=>f.properties[kdeKey()]||0);
+    const norm=normalize(raw);
+    geoLayer=L.geoJSON(SFCA_GEOJSON,{
+      style(f){const n=norm[features.indexOf(f)];return{fillColor:colorFromPalette(n,ORANGE9),fillOpacity:0.8,weight:0.3,color:'#fff',opacity:0.5};},
+      onEachFeature(f,layer){const p=f.properties;const i=features.indexOf(f);
+        layer.bindPopup(`<div style="font-size:13px"><b>KDE 밀도:</b> ${norm[i].toFixed(3)}<br><b>인구:</b> ${p.pop}명</div>`);}
+    }).addTo(map);
+    updateStats(raw,norm,'KDE 밀도',ORANGE9);
+  }
+  else if(currentLayer==='gi'){
+    const zvals=features.map(f=>f.properties[giKey()]||0);
+    const pvals=features.map(f=>f.properties[gipKey()]||1);
+    geoLayer=L.geoJSON(SFCA_GEOJSON,{
+      style(f){const i=features.indexOf(f);const z=zvals[i],p=pvals[i];
+        let c=GI_COLORS.notSig;
+        if(p<0.05){c=z>0?GI_COLORS.hotspot:GI_COLORS.cold;}
+        return{fillColor:c,fillOpacity:p<0.05?0.8:0.3,weight:0.3,color:'#fff',opacity:0.5};},
+      onEachFeature(f,layer){const i=features.indexOf(f);const z=zvals[i],p=pvals[i];const pop=f.properties.pop;
+        let label='유의하지 않음';if(p<0.05)label=z>0?'핫스팟 (높은 접근성 군집)':'콜드스팟 (낮은 접근성 군집)';
+        layer.bindPopup(`<div style="font-size:13px"><b>${label}</b><br>Z: ${z.toFixed(3)}, p: ${p.toFixed(4)}<br><b>인구:</b> ${pop}명</div>`);}
+    }).addTo(map);
+    updateGiStats(zvals,pvals);
+  }
 }
 
-function setupButtons(containerId, onChange){
-  const btns=document.querySelectorAll(`#${containerId} .btn-toggle`);
-  btns.forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      btns.forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      onChange(btn.dataset.val);
+function updateStats(raw,norm,title,palette){
+  const nz=norm.filter(v=>v>0);const sorted=[...nz].sort((a,b)=>a-b);
+  document.getElementById('stat-max').textContent=nz.length?'1.000':'N/A';
+  document.getElementById('stat-mean').textContent=nz.length?(nz.reduce((a,b)=>a+b,0)/nz.length).toFixed(3):'N/A';
+  document.getElementById('stat-median').textContent=sorted.length?sorted[Math.floor(sorted.length/2)].toFixed(3):'N/A';
+  document.getElementById('stat-zero').textContent=`${raw.filter(v=>v<=0).length} / ${raw.length}`;
+  document.getElementById('legend-title').textContent=title;
+  document.getElementById('gradient-bar').style.background=`linear-gradient(to right,${palette.join(',')})`;
+  document.getElementById('gradient-bar').style.display='';
+  document.getElementById('leg-min').textContent='0 (낮음)';
+  document.getElementById('leg-max').textContent='1.0 (높음)';
+  document.getElementById('legend-items').innerHTML='<div class="legend-item"><div class="legend-swatch" style="background:#e2e8f0"></div>접근불가 (공급 없음)</div>';
+}
+
+function updateGiStats(zvals,pvals){
+  let hot=0,cold=0,ns=0;
+  for(let i=0;i<zvals.length;i++){if(pvals[i]<0.05){zvals[i]>0?hot++:cold++;}else ns++;}
+  document.getElementById('stat-max').textContent=hot+'개';
+  document.getElementById('stat-mean').textContent=cold+'개';
+  document.getElementById('stat-median').textContent=ns+'개';
+  document.getElementById('stat-zero').textContent=`${hot+cold} / ${zvals.length}`;
+  document.querySelector('#stat-max + .lbl').textContent='핫스팟';
+  document.querySelector('#stat-mean + .lbl').textContent='콜드스팟';
+  document.querySelector('#stat-median + .lbl').textContent='유의하지 않음';
+  document.querySelector('#stat-zero + .lbl').textContent='유의 격자';
+  document.getElementById('legend-title').textContent='Gi* 핫스팟/콜드스팟';
+  document.getElementById('gradient-bar').style.display='none';
+  document.getElementById('leg-min').textContent='';document.getElementById('leg-max').textContent='';
+  document.getElementById('legend-items').innerHTML=`
+    <div class="legend-item"><div class="legend-swatch" style="background:${GI_COLORS.hotspot}"></div>핫스팟 (p&lt;0.05, Z&gt;0)</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:${GI_COLORS.cold}"></div>콜드스팟 (p&lt;0.05, Z&lt;0)</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:${GI_COLORS.notSig}"></div>유의하지 않음</div>`;
+}
+
+const defaultLabels={max:'최댓값',mean:'평균',median:'중앙값',zero:'접근불가'};
+function resetStatLabels(){
+  document.querySelector('#stat-max + .lbl').textContent=defaultLabels.max;
+  document.querySelector('#stat-mean + .lbl').textContent=defaultLabels.mean;
+  document.querySelector('#stat-median + .lbl').textContent=defaultLabels.median;
+  document.querySelector('#stat-zero + .lbl').textContent=defaultLabels.zero;
+}
+
+function setupBtns(id,cls,cb){
+  document.querySelectorAll(`#${id} .btn-toggle`).forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll(`#${id} .btn-toggle`).forEach(x=>x.classList.remove('active','active-orange','active-green'));
+      b.classList.add(cls);cb(b.dataset.val);
     });
   });
 }
-
-setupButtons('method-btns',v=>{currentMethod=v;updateMap();});
-setupButtons('catchment-btns',v=>{currentCatchment=v;updateMap();});
-setupButtons('metric-btns',v=>{currentMetric=v;updateMap();});
+setupBtns('layer-btns','active',v=>{currentLayer=v;resetStatLabels();updateMap();});
+setupBtns('method-btns','active',v=>{currentMethod=v;updateMap();});
+setupBtns('catchment-btns','active',v=>{currentCatchment=v;updateMap();});
+setupBtns('metric-btns','active',v=>{currentMetric=v;updateMap();});
 
 updateMap();
 </script>
