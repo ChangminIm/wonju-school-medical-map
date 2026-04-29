@@ -295,8 +295,12 @@ function selectSchool(idx){
 
   document.getElementById('empty-msg').style.display='none';
   const hdr=document.getElementById('result-header');hdr.style.display='';
-  hdr.textContent=`${school.name} → 가까운 의료기관 (${showDists.length}개)`;
+  hdr.textContent=school.name;
   const list=document.getElementById('result-list');list.innerHTML='';
+  const secTitle=document.createElement('li');
+  secTitle.style.cssText='padding:10px 20px;font-size:13px;font-weight:600;color:#333;background:#f8fafc;border-bottom:1px solid #eee';
+  secTitle.textContent=`📋 가까운 의료기관 (${showDists.length}개)`;
+  list.appendChild(secTitle);
   showDists.forEach((item,rank)=>{
     const li=document.createElement('li');li.className='result-item';
     li.innerHTML=`<span class="result-name">${rank+1}. ${item.name}</span><span class="result-type">${item.category} · ${item.type}</span><span class="result-dist">${item.dist<1?(item.dist*1000).toFixed(0)+'m':item.dist.toFixed(2)+'km'}</span>`;
