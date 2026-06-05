@@ -109,6 +109,10 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
     <div class="filter-group" style="margin-top:6px" id="health-check-group">
       <label><input type="checkbox" id="healthCheckOnly"> <span id="healthCheckLabel">학생건강검진 가능 기관만</span></label>
     </div>
+    <div id="care-section">
+      <h3>늘봄기관</h3>
+      <div class="filter-group" id="care-filters"></div>
+    </div>
   </div>
   <div class="count-row" id="count-row"></div>
   <div id="result-panel">
@@ -127,6 +131,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
   <div class="legend-item"><div class="legend-icon" style="background:#dc2626;width:16px;height:16px"></div> 소아청소년과</div>
   <div class="legend-item"><div class="legend-icon" style="background:#2563eb"></div> 내과</div>
   <div class="legend-item"><div class="legend-icon" style="background:#6b7280"></div> 기타</div>
+  <div class="legend-item"><div style="width:20px;height:20px;background:#16a34a;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1.5px solid #fff;box-shadow:0 0 2px rgba(0,0,0,.3)">🧸</div> 늘봄기관</div>
 </div>
 
 <script>
@@ -141,6 +146,8 @@ const SCHOOL_COLORS = {'초등학교':'#2563eb','중학교':'#7c3aed'};
 const CAT_COLORS = {'소아청소년과':'#dc2626','내과':'#2563eb','기타':'#6b7280'};
 const CAT_SIZES = {'소아청소년과':18,'내과':16,'기타':12};
 const TYPE_GROUPS = {'상급종합/종합병원':['상급종합병원','종합병원'],'병원':['병원','정신병원','요양병원'],'의원':['의원','치과병원','치과의원','한방병원','한의원']};
+const CARE_COLOR = '#16a34a';
+const CARE_TYPES = ['지역아동센터','다함께돌봄센터','청소년방과후아카데미'];
 
 const map = L.map('map',{zoomControl:false}).setView(REGION_CENTER.all,REGION_ZOOM.all);
 L.control.zoom({position:'topright'}).addTo(map);
@@ -156,14 +163,19 @@ function makeSchoolIcon(level){
   const emoji=level==='초등학교'?'🏫':'🎓';
   return L.divIcon({className:'',html:`<div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.35);font-size:16px;line-height:1">${emoji}</div>`,iconSize:[28,28],iconAnchor:[14,14]});
 }
+function makeCareIcon(){
+  return L.divIcon({className:'',html:`<div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;background:${CARE_COLOR};border:2px solid #fff;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.35);font-size:14px;line-height:1">🧸</div>`,iconSize:[26,26],iconAnchor:[13,13]});
+}
 
 const _prepared = {};
 function ensurePrepared(region){
   if(_prepared[region]) return;
   const d = ALL_DATA[region];
+  if(!d.care) d.care=[];
   d.schools.forEach(s=>{s._region=region;if(s.level==='방송통신중')s.level='중학교';});
   d.medical.forEach(m=>{m._region=region;});
-  const all=[...d.schools.map((s,i)=>({arr:'schools',i,lat:s.lat,lng:s.lng})),...d.medical.map((m,i)=>({arr:'medical',i,lat:m.lat,lng:m.lng}))];
+  d.care.forEach(c=>{c._region=region;});
+  const all=[...d.schools.map((s,i)=>({arr:'schools',i,lat:s.lat,lng:s.lng})),...d.medical.map((m,i)=>({arr:'medical',i,lat:m.lat,lng:m.lng})),...d.care.map((c,i)=>({arr:'care',i,lat:c.lat,lng:c.lng}))];
   const groups={};
   all.forEach(p=>{const k=p.lat.toFixed(5)+','+p.lng.toFixed(5);(groups[k]=groups[k]||[]).push(p);});
   Object.values(groups).forEach(pts=>{
@@ -176,13 +188,13 @@ function ensurePrepared(region){
 function prepareData(){
   ensurePrepared('wonju'); ensurePrepared('yongin');
   if(currentRegion==='all'){
-    DATA={schools:[...ALL_DATA.wonju.schools,...ALL_DATA.yongin.schools], medical:[...ALL_DATA.wonju.medical,...ALL_DATA.yongin.medical]};
+    DATA={schools:[...ALL_DATA.wonju.schools,...ALL_DATA.yongin.schools], medical:[...ALL_DATA.wonju.medical,...ALL_DATA.yongin.medical], care:[...ALL_DATA.wonju.care,...ALL_DATA.yongin.care]};
   } else {
-    DATA={schools:[...ALL_DATA[currentRegion].schools], medical:[...ALL_DATA[currentRegion].medical]};
+    DATA={schools:[...ALL_DATA[currentRegion].schools], medical:[...ALL_DATA[currentRegion].medical], care:[...ALL_DATA[currentRegion].care]};
   }
 }
 
-let schoolMarkers=[],medMarkers=[],activeLines=[],activeCircles=[],labelMarkers=[],selectedSchool=null;
+let schoolMarkers=[],medMarkers=[],careMarkers=[],activeLines=[],activeCircles=[],labelMarkers=[],selectedSchool=null;
 
 function buildFilters(){
   const sf=document.getElementById('school-filters');
@@ -202,10 +214,18 @@ function buildFilters(){
   });
   document.getElementById('healthCheckLabel').textContent=HEALTH_CHECK_LABEL[currentRegion];
   document.getElementById('healthCheckOnly').checked=false;
-  document.querySelectorAll('[data-school-level],[data-cat],[data-type-group],#healthCheckOnly').forEach(cb=>{
+  const caref=document.getElementById('care-filters');
+  caref.innerHTML='';
+  const careTypesPresent=[...new Set(DATA.care.map(c=>c.type))];
+  document.getElementById('care-section').style.display=careTypesPresent.length?'':'none';
+  CARE_TYPES.filter(t=>careTypesPresent.includes(t)).forEach(t=>{
+    caref.innerHTML+=`<label><input type="checkbox" checked data-care-type="${t}"> ${t}</label>`;
+  });
+  document.querySelectorAll('[data-school-level],[data-cat],[data-type-group],[data-care-type],#healthCheckOnly').forEach(cb=>{
     cb.addEventListener('change',()=>{renderMarkers();if(selectedSchool!==null)selectSchool(selectedSchool);});
   });
 }
+function getVisibleCareTypes(){const s=new Set();document.querySelectorAll('[data-care-type]:checked').forEach(c=>s.add(c.dataset.careType));return s;}
 
 function getVisibleCats(){const s=new Set();document.querySelectorAll('[data-cat]:checked').forEach(c=>s.add(c.dataset.cat));return s;}
 function getVisibleTypes(){const s=new Set();document.querySelectorAll('[data-type-group]:checked').forEach(c=>{TYPE_GROUPS[c.dataset.typeGroup].forEach(t=>s.add(t));});return s;}
@@ -229,9 +249,9 @@ function radiusSummaryHTML(summary){
 }
 
 function renderMarkers(){
-  schoolMarkers.forEach(m=>map.removeLayer(m));medMarkers.forEach(m=>map.removeLayer(m));
-  schoolMarkers=[];medMarkers=[];
-  const visLevels=getVisibleSchoolLevels(),visCats=getVisibleCats(),visTypes=getVisibleTypes();
+  schoolMarkers.forEach(m=>map.removeLayer(m));medMarkers.forEach(m=>map.removeLayer(m));careMarkers.forEach(m=>map.removeLayer(m));
+  schoolMarkers=[];medMarkers=[];careMarkers=[];
+  const visLevels=getVisibleSchoolLevels(),visCats=getVisibleCats(),visTypes=getVisibleTypes(),visCare=getVisibleCareTypes();
   const hcOnly=document.getElementById('healthCheckOnly').checked;
 
   DATA.schools.forEach((s,i)=>{
@@ -253,7 +273,16 @@ function renderMarkers(){
     m.bindPopup(`<div class="info-popup"><h3>${med.name}</h3><span class="popup-badge" style="background:${CAT_COLORS[med.category]}">${med.category}</span><span class="popup-badge" style="background:#555">${med.type}</span>${hcBadge}<table><tr><td>소아청소년과 전문의</td><td><strong>${med.ped}명</strong></td></tr><tr><td>내과 전문의</td><td><strong>${med.inter}명</strong></td></tr></table></div>`,{offset:[0,-6]});
     medMarkers.push(m);
   });
-  document.getElementById('count-row').innerHTML=`<span><span class="dot" style="background:#2563eb"></span> 학교 ${schoolMarkers.length}개</span><span><span class="dot" style="background:#ea580c"></span> 의료기관 ${medMarkers.length}개</span>`;
+  DATA.care.forEach((c)=>{
+    if(!visCare.has(c.type))return;
+    const m=L.marker([c.lat,c.lng],{icon:makeCareIcon()}).addTo(map);
+    m.bindTooltip(c.name,{direction:'top',offset:[0,-10]});
+    const telRow=c.tel?`<tr><td>전화</td><td><strong>${c.tel}</strong></td></tr>`:'';
+    const addrRow=c.address?`<tr><td>주소</td><td style="text-align:right">${c.address}</td></tr>`:'';
+    m.bindPopup(`<div class="info-popup"><h3>${c.name}</h3><span class="popup-badge" style="background:${CARE_COLOR}">${c.type}</span><table>${addrRow}${telRow}</table></div>`,{offset:[0,-10],maxWidth:280});
+    careMarkers.push(m);
+  });
+  document.getElementById('count-row').innerHTML=`<span><span class="dot" style="background:#2563eb"></span> 학교 ${schoolMarkers.length}개</span><span><span class="dot" style="background:#ea580c"></span> 의료기관 ${medMarkers.length}개</span><span><span class="dot" style="background:#16a34a"></span> 늘봄 ${careMarkers.length}개</span>`;
 }
 
 function clearSelection(){
@@ -346,6 +375,7 @@ function doSearch(q){
   const regionLabel={wonju:'원주',yongin:'용인'};
   DATA.schools.forEach((s,i)=>{if(s.name.toLowerCase().includes(q))matches.push({name:s.name,tag:(currentRegion==='all'?'['+regionLabel[s._region]+'] ':'')+s.level,tagColor:SCHOOL_COLORS[s.level]||'#2563eb',type:'school',idx:i,lat:s.lat,lng:s.lng});});
   DATA.medical.forEach((m,i)=>{if(m.name.toLowerCase().includes(q))matches.push({name:m.name,tag:(currentRegion==='all'?'['+regionLabel[m._region]+'] ':'')+m.category,tagColor:CAT_COLORS[m.category]||'#6b7280',type:'medical',idx:i,lat:m.lat,lng:m.lng});});
+  DATA.care.forEach((c,i)=>{if(c.name.toLowerCase().includes(q))matches.push({name:c.name,tag:(currentRegion==='all'?'['+regionLabel[c._region]+'] ':'')+'늘봄',tagColor:CARE_COLOR,type:'care',idx:i,lat:c.lat,lng:c.lng});});
   if(!matches.length){searchResults.innerHTML='<li style="color:#aaa;pointer-events:none">검색 결과 없음</li>';searchResults.style.display='block';return;}
   matches.slice(0,20).forEach(item=>{
     const li=document.createElement('li');
