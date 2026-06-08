@@ -19,6 +19,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;height:100vh;display:flex
 .topbar .seg{margin-left:auto;display:flex;gap:6px;background:rgba(255,255,255,.15);padding:4px;border-radius:8px}
 .topbar .seg button{background:transparent;border:none;color:#fff;padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;opacity:.8}
 .topbar .seg button.active{background:#fff;color:var(--kk-green-dark);opacity:1}
+.topbar #metricSeg{margin-left:0}
 .topbar label.chk{display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer}
 #map{flex:1;z-index:0}
 
@@ -47,6 +48,10 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;height:100vh;display:flex
     <button data-level="elementary" class="active">초등학교</button>
     <button data-level="middle">중학교</button>
   </div>
+  <div class="seg" id="metricSeg">
+    <button data-metric="rate" class="active">비만율</button>
+    <button data-metric="gi">Gi* 핫스팟</button>
+  </div>
   <label class="chk"><input type="checkbox" id="showPoints" checked> 학교 위치</label>
 </div>
 <div id="map"></div>
@@ -60,6 +65,16 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;height:100vh;display:flex
 
 <script>
 const COLORS=['#ffffb2','#fecc5c','#fd8d3c','#f03b20','#bd0026'];
+// Gi* 색상 (2SFCA 컨벤션: #dc2626 Hot, #2563eb Cold, #e2e8f0 Not Sig)
+const GI_COLORS={
+  'Hot 99%':'#dc2626',
+  'Hot 95%':'#f87171',
+  'Not Significant':'#e2e8f0',
+  'Cold 95%':'#93c5fd',
+  'Cold 99%':'#2563eb'
+};
+const GI_ORDER=['Hot 99%','Hot 95%','Not Significant','Cold 95%','Cold 99%'];
+
 const map=L.map('map',{zoomControl:false}).setView([37.342,127.94],11);
 L.control.zoom({position:'topright'}).addTo(map);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
@@ -67,6 +82,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 }).addTo(map);
 
 let currentLevel='elementary';
+let currentMetric='rate';
 let polyLayer=null, pointLayer=null;
 
 function classIndex(rate,breaks){
@@ -76,9 +92,49 @@ function classIndex(rate,breaks){
   }
   return breaks.length-2;
 }
-function colorFor(rate,breaks){
+function colorForRate(rate,breaks){
   const i=classIndex(rate,breaks);
   return i<0?'#cccccc':COLORS[Math.min(i,COLORS.length-1)];
+}
+function colorForGi(cls){
+  return GI_COLORS[cls]||'#cccccc';
+}
+
+function styleFor(props,breaks){
+  if(currentMetric==='gi'){
+    return {fillColor:colorForGi(props.giClass),fillOpacity:0.78,color:'#fff',weight:1};
+  }
+  return {fillColor:colorForRate(props.obeseRate,breaks),fillOpacity:0.75,color:'#fff',weight:1};
+}
+
+function popupHtml(p){
+  const alsoRow=p.also?`<div class="also">※ 영향권 공유: ${p.also}</div>`:'';
+  const giRow=(p.giClass!=null)
+    ? `<tr><td>Gi* 분류</td><td>${p.giClass}</td></tr>`
+      +`<tr><td>Gi* Z</td><td>${p.giZ!=null?p.giZ.toFixed(2):'—'}</td></tr>`
+      +`<tr><td>Gi* p</td><td>${p.giP!=null?p.giP.toFixed(3):'—'}</td></tr>`
+    : '';
+  if(currentMetric==='gi'){
+    const cls=p.giClass||'—';
+    const cls_color=GI_COLORS[cls]||'#888';
+    return `<div class="info-popup"><h3>${p.name}</h3>`
+      +`<div class="rate" style="color:${cls_color}">${cls}</div>`
+      +`<table>`
+      +`<tr><td>학교급</td><td>${p.level}</td></tr>`
+      +`<tr><td>비만율</td><td>${p.obeseRate}%</td></tr>`
+      +`<tr><td>학생 수</td><td>${p.students}명</td></tr>`
+      +`<tr><td>Gi* Z</td><td>${p.giZ!=null?p.giZ.toFixed(2):'—'}</td></tr>`
+      +`<tr><td>Gi* p</td><td>${p.giP!=null?p.giP.toFixed(3):'—'}</td></tr>`
+      +`</table>${alsoRow}</div>`;
+  }
+  return `<div class="info-popup"><h3>${p.name}</h3>`
+    +`<div class="rate">${p.obeseRate}%</div>`
+    +`<table>`
+    +`<tr><td>학교급</td><td>${p.level}</td></tr>`
+    +`<tr><td>학생 수</td><td>${p.students}명</td></tr>`
+    +`<tr><td>소아비만(추정)</td><td>약 ${Math.round(p.obese)}명</td></tr>`
+    +giRow
+    +`</table>${alsoRow}</div>`;
 }
 
 function render(){
@@ -87,11 +143,9 @@ function render(){
   const d=THIESSEN_DATA[currentLevel];
   const breaks=d.breaks;
   polyLayer=L.geoJSON(d,{
-    style:f=>({fillColor:colorFor(f.properties.obeseRate,breaks),fillOpacity:0.75,color:'#fff',weight:1}),
+    style:f=>styleFor(f.properties,breaks),
     onEachFeature:(f,layer)=>{
-      const p=f.properties;
-      const alsoRow=p.also?`<div class="also">※ 영향권 공유: ${p.also}</div>`:'';
-      layer.bindPopup(`<div class="info-popup"><h3>${p.name}</h3><div class="rate">${p.obeseRate}%</div><table><tr><td>학교급</td><td>${p.level}</td></tr><tr><td>학생 수</td><td>${p.students}명</td></tr><tr><td>소아비만(추정)</td><td>약 ${Math.round(p.obese)}명</td></tr></table>${alsoRow}</div>`);
+      layer.bindPopup(popupHtml(f.properties));
       layer.on('mouseover',()=>layer.setStyle({weight:2.5,color:'#333'}));
       layer.on('mouseout',()=>layer.setStyle({weight:1,color:'#fff'}));
     }
@@ -107,12 +161,15 @@ function render(){
   });
   if(document.getElementById('showPoints').checked) pointLayer.addTo(map);
 
-  buildLegend(breaks);
+  document.getElementById('legend-title').textContent=
+    currentMetric==='gi'?'Gi* 핫스팟 (Queen 인접, p<0.05/0.01)':'비만율 (%)';
+  if(currentMetric==='gi') buildLegendGi(d);
+  else buildLegendRate(breaks);
   buildStats(d);
   try{map.fitBounds(polyLayer.getBounds(),{padding:[20,20]});}catch(e){}
 }
 
-function buildLegend(breaks){
+function buildLegendRate(breaks){
   const el=document.getElementById('legend');
   el.innerHTML='';
   for(let i=0;i<breaks.length-1;i++){
@@ -121,7 +178,28 @@ function buildLegend(breaks){
     el.appendChild(row);
   }
 }
+function buildLegendGi(d){
+  const el=document.getElementById('legend');
+  el.innerHTML='';
+  const counts=d.giCounts||{};
+  GI_ORDER.forEach(cls=>{
+    const row=document.createElement('div');row.className='legend-row';
+    const n=counts[cls]||0;
+    row.innerHTML=`<span class="legend-sw" style="background:${GI_COLORS[cls]}"></span><span>${cls} <span style="color:#888">(${n})</span></span>`;
+    el.appendChild(row);
+  });
+}
 function buildStats(d){
+  if(currentMetric==='gi'){
+    const counts=d.giCounts||{};
+    const hot=(counts['Hot 99%']||0)+(counts['Hot 95%']||0);
+    const cold=(counts['Cold 99%']||0)+(counts['Cold 95%']||0);
+    document.getElementById('stats').innerHTML=
+      `<div><span>대상 영향권</span><b>${d.count}개</b></div>`+
+      `<div><span>Hot (유의)</span><b>${hot}개</b></div>`+
+      `<div><span>Cold (유의)</span><b>${cold}개</b></div>`;
+    return;
+  }
   document.getElementById('stats').innerHTML=
     `<div><span>대상 영향권</span><b>${d.count}개</b></div>`+
     `<div><span>최소 / 최대</span><b>${d.min}% / ${d.max}%</b></div>`+
@@ -133,6 +211,14 @@ document.querySelectorAll('#levelSeg button').forEach(b=>{
     if(b.dataset.level===currentLevel) return;
     currentLevel=b.dataset.level;
     document.querySelectorAll('#levelSeg button').forEach(x=>x.classList.toggle('active',x===b));
+    render();
+  });
+});
+document.querySelectorAll('#metricSeg button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    if(b.dataset.metric===currentMetric) return;
+    currentMetric=b.dataset.metric;
+    document.querySelectorAll('#metricSeg button').forEach(x=>x.classList.toggle('active',x===b));
     render();
   });
 });
