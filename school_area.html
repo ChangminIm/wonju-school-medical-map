@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>통학구역 소아비만율 단계구분도 (원주시)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="data.js"></script>
+<script src="school_area.js"></script>
+<style>
+:root{--kk-green:#036b3f;--kk-green-dark:#024e2e}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Malgun Gothic',sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:linear-gradient(135deg,var(--kk-green-dark),var(--kk-green));color:#fff;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:1000}
+.topbar a.home{color:#fff;text-decoration:none;font-size:13px;opacity:.9;white-space:nowrap}
+.topbar a.home:hover{opacity:1}
+.topbar h1{font-size:16px;font-weight:700}
+.topbar .seg{margin-left:auto;display:flex;gap:6px;background:rgba(255,255,255,.15);padding:4px;border-radius:8px}
+.topbar .seg button{background:transparent;border:none;color:#fff;padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;opacity:.8}
+.topbar .seg button.active{background:#fff;color:var(--kk-green-dark);opacity:1}
+.topbar label.chk{display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer}
+#map{flex:1;z-index:0}
+
+.panel{position:absolute;top:64px;left:12px;z-index:1000;background:rgba(255,255,255,.96);border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.18);padding:14px 16px;font-size:12px;min-width:200px}
+.panel h4{font-size:13px;color:#333;margin-bottom:8px}
+.legend-row{display:flex;align-items:center;gap:8px;margin:4px 0}
+.legend-sw{width:18px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,.15);flex-shrink:0}
+.stats{margin-top:10px;padding-top:10px;border-top:1px solid #eee;color:#555}
+.stats div{display:flex;justify-content:space-between;margin:3px 0}
+.stats b{color:var(--kk-green)}
+
+.info-popup h3{font-size:14px;margin:0 0 6px;color:#222}
+.info-popup table{width:100%;border-collapse:collapse}
+.info-popup td{padding:3px 6px;font-size:12px;border-bottom:1px solid #f0f0f0}
+.info-popup td:first-child{color:#666}
+.info-popup td:last-child{text-align:right;color:#222;font-weight:600}
+.info-popup .rate{font-size:18px;font-weight:800;color:#bd0026}
+.info-popup .badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle}
+.info-popup .badge.s{background:#e2e8f0;color:#475569}
+.info-popup .badge.c{background:#fde68a;color:#92400e}
+.info-popup .note{font-size:11px;color:#888;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="home" href="index.html">← 메인으로</a>
+  <h1>🟩 통학구역 소아비만율 단계구분도 · 원주시 초등</h1>
+  <div class="seg" id="metricSeg">
+    <button data-metric="rate" class="active">비만율</button>
+    <button data-metric="gi">Gi* 핫스팟</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="showPoints" checked> 학교 위치</label>
+</div>
+<div id="map"></div>
+
+<div class="panel">
+  <h4 id="legend-title">비만율 (%)</h4>
+  <div id="legend"></div>
+  <div class="stats" id="stats"></div>
+  <div style="margin-top:8px;font-size:11px;color:#999">통학구역 = 공식 학구 · 공동구역=구성교 평균</div>
+</div>
+
+<script>
+const COLORS=['#ffffb2','#fecc5c','#fd8d3c','#f03b20','#bd0026'];
+// Gi* 색상 (2SFCA 컨벤션: #dc2626 Hot, #2563eb Cold, #e2e8f0 Not Sig)
+const GI_COLORS={
+  'Hot 99%':'#dc2626',
+  'Hot 95%':'#f87171',
+  'Not Significant':'#e2e8f0',
+  'Cold 95%':'#93c5fd',
+  'Cold 99%':'#2563eb'
+};
+const GI_ORDER=['Hot 99%','Hot 95%','Not Significant','Cold 95%','Cold 99%'];
+
+const map=L.map('map',{zoomControl:false}).setView([37.342,127.94],11);
+L.control.zoom({position:'topright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',maxZoom:19
+}).addTo(map);
+
+let currentMetric='rate';
+let polyLayer=null, pointLayer=null;
+
+function classIndex(rate,breaks){
+  if(rate==null) return -1;
+  for(let i=0;i<breaks.length-1;i++){
+    if(rate<=breaks[i+1]) return i;
+  }
+  return breaks.length-2;
+}
+function colorForRate(rate,breaks){
+  const i=classIndex(rate,breaks);
+  return i<0?'#cccccc':COLORS[Math.min(i,COLORS.length-1)];
+}
+function colorForGi(cls){
+  return GI_COLORS[cls]||'#cccccc';
+}
+
+function styleFor(props,breaks){
+  if(currentMetric==='gi'){
+    return {fillColor:colorForGi(props.giClass),fillOpacity:0.78,color:'#fff',weight:1};
+  }
+  return {fillColor:colorForRate(props.obeseRate,breaks),fillOpacity:0.75,color:'#fff',weight:1};
+}
+
+function popupHtml(p){
+  const noteRow=p.note?`<div class="note">※ ${p.note}</div>`:'';
+  const badge=p.gb==='공동'?'<span class="badge c">공동</span>':'<span class="badge s">단독</span>';
+  if(currentMetric==='gi'){
+    const cls=p.giClass||'—';
+    const cls_color=GI_COLORS[cls]||'#888';
+    return `<div class="info-popup"><h3>${p.name}${badge}</h3>`
+      +`<div class="rate" style="color:${cls_color}">${cls}</div>`
+      +`<table>`
+      +`<tr><td>구성 학교</td><td>${p.schools}</td></tr>`
+      +`<tr><td>비만율</td><td>${p.obeseRate}%</td></tr>`
+      +`<tr><td>Gi* Z</td><td>${p.giZ!=null?p.giZ.toFixed(2):'—'}</td></tr>`
+      +`<tr><td>Gi* p</td><td>${p.giP!=null?p.giP.toFixed(3):'—'}</td></tr>`
+      +`</table>${noteRow}</div>`;
+  }
+  return `<div class="info-popup"><h3>${p.name}${badge}</h3>`
+    +`<div class="rate">${p.obeseRate}%</div>`
+    +`<table>`
+    +`<tr><td>구성 학교</td><td>${p.schools}</td></tr>`
+    +`<tr><td>학생 수</td><td>${p.students}명</td></tr>`
+    +`<tr><td>소아비만(추정)</td><td>약 ${Math.round(p.obese)}명</td></tr>`
+    +`</table>${noteRow}</div>`;
+}
+
+function render(){
+  if(polyLayer) map.removeLayer(polyLayer);
+  if(pointLayer) map.removeLayer(pointLayer);
+  const d=SCHOOL_AREA_DATA;
+  const breaks=d.breaks;
+  polyLayer=L.geoJSON(d,{
+    style:f=>styleFor(f.properties,breaks),
+    onEachFeature:(f,layer)=>{
+      layer.bindPopup(popupHtml(f.properties));
+      layer.on('mouseover',()=>layer.setStyle({weight:2.5,color:'#333'}));
+      layer.on('mouseout',()=>layer.setStyle({weight:1,color:'#fff'}));
+    }
+  }).addTo(map);
+
+  // 학교 위치점 (원주 초등학교)
+  const schools=ALL_DATA.wonju.schools.filter(s=>s.level==='초등학교');
+  pointLayer=L.layerGroup();
+  schools.forEach(s=>{
+    L.circleMarker([s.lat,s.lng],{radius:3.5,color:'#1f2937',weight:1,fillColor:'#fff',fillOpacity:1})
+      .bindTooltip(s.name,{direction:'top'}).addTo(pointLayer);
+  });
+  if(document.getElementById('showPoints').checked) pointLayer.addTo(map);
+
+  document.getElementById('legend-title').textContent=
+    currentMetric==='gi'?'Gi* 핫스팟 (Queen 인접, p<0.05/0.01)':'비만율 (%)';
+  if(currentMetric==='gi') buildLegendGi(d);
+  else buildLegendRate(breaks);
+  buildStats(d);
+  try{map.fitBounds(polyLayer.getBounds(),{padding:[20,20]});}catch(e){}
+}
+
+function buildLegendRate(breaks){
+  const el=document.getElementById('legend');
+  el.innerHTML='';
+  for(let i=0;i<breaks.length-1;i++){
+    const row=document.createElement('div');row.className='legend-row';
+    row.innerHTML=`<span class="legend-sw" style="background:${COLORS[i]}"></span><span>${breaks[i].toFixed(1)} ~ ${breaks[i+1].toFixed(1)}%</span>`;
+    el.appendChild(row);
+  }
+}
+function buildLegendGi(d){
+  const el=document.getElementById('legend');
+  el.innerHTML='';
+  const counts=d.giCounts||{};
+  GI_ORDER.forEach(cls=>{
+    const row=document.createElement('div');row.className='legend-row';
+    const n=counts[cls]||0;
+    row.innerHTML=`<span class="legend-sw" style="background:${GI_COLORS[cls]}"></span><span>${cls} <span style="color:#888">(${n})</span></span>`;
+    el.appendChild(row);
+  });
+}
+function buildStats(d){
+  if(currentMetric==='gi'){
+    const counts=d.giCounts||{};
+    const hot=(counts['Hot 99%']||0)+(counts['Hot 95%']||0);
+    const cold=(counts['Cold 99%']||0)+(counts['Cold 95%']||0);
+    document.getElementById('stats').innerHTML=
+      `<div><span>대상 통학구역</span><b>${d.count}개</b></div>`+
+      `<div><span>Hot (유의)</span><b>${hot}개</b></div>`+
+      `<div><span>Cold (유의)</span><b>${cold}개</b></div>`;
+    return;
+  }
+  document.getElementById('stats').innerHTML=
+    `<div><span>대상 통학구역</span><b>${d.count}개 (공동 ${d.shared})</b></div>`+
+    `<div><span>최소 / 최대</span><b>${d.min}% / ${d.max}%</b></div>`+
+    `<div><span>평균 / 중앙값</span><b>${d.mean}% / ${d.median}%</b></div>`;
+}
+
+document.querySelectorAll('#metricSeg button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    if(b.dataset.metric===currentMetric) return;
+    currentMetric=b.dataset.metric;
+    document.querySelectorAll('#metricSeg button').forEach(x=>x.classList.toggle('active',x===b));
+    render();
+  });
+});
+document.getElementById('showPoints').addEventListener('change',e=>{
+  if(!pointLayer) return;
+  if(e.target.checked) pointLayer.addTo(map); else map.removeLayer(pointLayer);
+});
+
+render();
+</script>
+</body>
+</html>
