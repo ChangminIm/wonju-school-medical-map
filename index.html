@@ -48,6 +48,19 @@ a{color:inherit}
 .map-card:hover .go{background:var(--kk-green-dark)}
 .map-card .tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:5px;background:#e8f5ee;color:var(--kk-green);margin-bottom:14px;align-self:flex-start}
 
+.section-title .cnt{font-size:13px;font-weight:500;color:var(--muted)}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:20px;margin-bottom:48px}
+.result-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.result-card .thumb{display:block;background:#f6f7f5;border-bottom:1px solid var(--border);aspect-ratio:4/4.4;overflow:hidden}
+.result-card .thumb img{width:100%;height:100%;object-fit:contain;transition:transform .2s}
+.result-card .thumb:hover img{transform:scale(1.03)}
+.result-card .body{padding:16px 18px 18px;display:flex;flex-direction:column;flex:1}
+.result-card h3{font-size:15.5px;font-weight:700;margin-bottom:4px}
+.result-card .meta{font-size:11.5px;color:var(--muted);margin-bottom:10px}
+.result-card .desc{font-size:12.5px;color:#4b5563;line-height:1.45;flex:1;margin-bottom:14px}
+.result-card .dl{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;background:#e8f5ee;color:var(--kk-green);border:1px solid #cde8d8;padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:600;text-decoration:none}
+.result-card .dl:hover{background:var(--kk-green);color:#fff;border-color:var(--kk-green)}
+
 footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 40px;border-top:1px solid var(--border)}
 </style>
 </head>
@@ -97,6 +110,32 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
       <p>500m 인구격자 기반 2SFCA·E2SFCA로 용인시 초등학생의 소아과·내과 접근성을 분석하고, KDE·Getis-Ord Gi* 핫스팟까지 함께 제공합니다.</p>
       <span class="go">맵 열기 →</span>
     </a>
+  </div>
+
+  <div class="section-title">📈 결과 지도 <span class="cnt">(총 2개)</span></div>
+  <div class="results">
+    <div class="result-card">
+      <a class="thumb" href="maps/wonju_elem_obesity.png" target="_blank" rel="noopener">
+        <img src="maps/wonju_elem_obesity.png" alt="원주 초등학교 소아비만율 단계구분도">
+      </a>
+      <div class="body">
+        <h3>01. 원주 초등학교 소아비만율</h3>
+        <div class="meta">184 KB · 클릭 시 원본</div>
+        <div class="desc">초등학교 51교 · 티센 영향권 기준 · 추정 소아비만율(2.9~7.6%) 분위수 5등급 단계구분도</div>
+        <a class="dl" href="maps/wonju_elem_obesity.png" download="원주_초등학교_소아비만율.png">⬇ PNG 다운로드</a>
+      </div>
+    </div>
+    <div class="result-card">
+      <a class="thumb" href="maps/wonju_mid_obesity.png" target="_blank" rel="noopener">
+        <img src="maps/wonju_mid_obesity.png" alt="원주 중학교 소아비만율 단계구분도">
+      </a>
+      <div class="body">
+        <h3>02. 원주 중학교 소아비만율</h3>
+        <div class="meta">153 KB · 클릭 시 원본</div>
+        <div class="desc">중학교 25교 · 티센 영향권 기준 · 추정 소아비만율(0~22.3%) 분위수 5등급 단계구분도</div>
+        <a class="dl" href="maps/wonju_mid_obesity.png" download="원주_중학교_소아비만율.png">⬇ PNG 다운로드</a>
+      </div>
+    </div>
   </div>
 </div>
 
