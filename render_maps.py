@@ -274,48 +274,73 @@ for level, c in CONF.items():
 
 
 # ──────────────────────────────────────────────────────────────
-# 원주 초등 통학구역 비만율 / Gi* PNG (school_area.js 기반 — 값/Gi*는 재계산 없이 그대로 사용)
+# 원주 통학구역 비만율 / Gi* PNG (school_area.js 기반 — 값/Gi*는 재계산 없이 그대로 사용)
+# 초등(56개) · 중등(8개 학구/학교군) 각각 비만율·Gi* 2종씩
 # ──────────────────────────────────────────────────────────────
 sa_txt = open(os.path.join(BASE, "school_area.js"), encoding="utf-8").read()
 SA = json.loads(sa_txt[sa_txt.index("{"):sa_txt.rindex("}") + 1])
-sa_gdf = gpd.GeoDataFrame.from_features(SA["features"], crs="EPSG:4326").to_crs(epsg=5179)
-sa_breaks = SA["breaks"]
 
-epts = [s for s in schools if s["level"] == "초등학교"]
-sa_pgdf = gpd.GeoDataFrame(
-    {"name": [s["name"] for s in epts]},
-    geometry=[Point(s["lng"], s["lat"]) for s in epts],
-    crs="EPSG:4326",
-).to_crs(epsg=5179)
+SA_CONF = {
+    "elementary": {
+        "lvname": "초등학교",
+        "title_rate": "원주시 초등학교 통학구역 소아비만율 분포",
+        "title_gi": "원주시 초등학교 통학구역 소아비만율 Gi* 핫스팟",
+        "out_rate": "원주_초등학교_통학구역_소아비만율.png",
+        "out_gi": "원주_초등학교_통학구역_소아비만_Gi.png",
+        "alt_rate": "wonju_elem_area_obesity.png",
+        "alt_gi": "wonju_elem_area_gi.png",
+    },
+    "middle": {
+        "lvname": "중학교",
+        "title_rate": "원주시 중학교 통학구역 소아비만율 분포",
+        "title_gi": "원주시 중학교 통학구역 소아비만율 Gi* 핫스팟",
+        "out_rate": "원주_중학교_통학구역_소아비만율.png",
+        "out_gi": "원주_중학교_통학구역_소아비만_Gi.png",
+        "alt_rate": "wonju_mid_area_obesity.png",
+        "alt_gi": "wonju_mid_area_gi.png",
+    },
+}
 
-# ─── 비만율 지도 ─────────────────────────────────
-sa_gdf["cidx"] = sa_gdf["obeseRate"].apply(lambda r: class_index(r, sa_breaks) if r is not None else -1)
-sa_gdf["fill"] = sa_gdf["cidx"].apply(lambda i: COLORS[min(i, len(COLORS) - 1)] if i >= 0 else "#dddddd")
-legend_items_rate = []
-for i in range(len(sa_breaks) - 2, -1, -1):
-    legend_items_rate.append(Patch(facecolor=COLORS[i], edgecolor="#999",
-                                   label="%.1f ~ %.1f%%" % (sa_breaks[i], sa_breaks[i + 1])))
-legend_items_rate.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
-                                markeredgecolor="white", markersize=8, label="초등학교"))
-sa_out_rate = os.path.join(OUTDIR, "원주_초등학교_통학구역_소아비만율.png")
-render_map(sa_gdf, sa_pgdf, "원주시 초등학교 통학구역 소아비만율 분포",
-           legend_items_rate, "추정 소아비만율", "초등학교", sa_out_rate)
-shutil.copyfile(sa_out_rate, os.path.join(OUTDIR, "wonju_elem_area_obesity.png"))
-print("저장: 원주_초등학교_통학구역_소아비만율.png (%.1f KB) breaks=%s, 구역 %d개"
-      % (os.path.getsize(sa_out_rate) / 1024, sa_breaks, len(sa_gdf)))
+for level, sc in SA_CONF.items():
+    d = SA[level]
+    sa_gdf = gpd.GeoDataFrame.from_features(d["features"], crs="EPSG:4326").to_crs(epsg=5179)
+    sa_breaks = d["breaks"]
 
-# ─── Gi* 핫스팟 지도 ───────────────────────────
-sa_gdf["fill"] = sa_gdf["giClass"].apply(lambda g: GI_COLORS.get(g, "#dddddd"))
-sa_counts = SA["giCounts"]
-legend_items_gi = []
-for cls in GI_ORDER:
-    legend_items_gi.append(Patch(facecolor=GI_COLORS[cls], edgecolor="#999",
-                                 label="%s (%d)" % (cls, sa_counts.get(cls, 0))))
-legend_items_gi.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
-                              markeredgecolor="white", markersize=8, label="초등학교"))
-sa_out_gi = os.path.join(OUTDIR, "원주_초등학교_통학구역_소아비만_Gi.png")
-render_map(sa_gdf, sa_pgdf, "원주시 초등학교 통학구역 소아비만율 Gi* 핫스팟",
-           legend_items_gi, "Gi* (Queen, p<0.05/0.01)", "초등학교", sa_out_gi)
-shutil.copyfile(sa_out_gi, os.path.join(OUTDIR, "wonju_elem_area_gi.png"))
-print("저장: 원주_초등학교_통학구역_소아비만_Gi.png (%.1f KB) Gi* counts=%s"
-      % (os.path.getsize(sa_out_gi) / 1024, sa_counts))
+    spts = [s for s in schools if s["level"] == sc["lvname"]]
+    sa_pgdf = gpd.GeoDataFrame(
+        {"name": [s["name"] for s in spts]},
+        geometry=[Point(s["lng"], s["lat"]) for s in spts],
+        crs="EPSG:4326",
+    ).to_crs(epsg=5179)
+
+    # ─── 비만율 지도 ─────────────────────────────────
+    sa_gdf["cidx"] = sa_gdf["obeseRate"].apply(lambda r: class_index(r, sa_breaks) if r is not None else -1)
+    sa_gdf["fill"] = sa_gdf["cidx"].apply(lambda i: COLORS[min(i, len(COLORS) - 1)] if i >= 0 else "#dddddd")
+    legend_items_rate = []
+    for i in range(len(sa_breaks) - 2, -1, -1):
+        legend_items_rate.append(Patch(facecolor=COLORS[i], edgecolor="#999",
+                                       label="%.1f ~ %.1f%%" % (sa_breaks[i], sa_breaks[i + 1])))
+    legend_items_rate.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
+                                    markeredgecolor="white", markersize=8, label=sc["lvname"]))
+    sa_out_rate = os.path.join(OUTDIR, sc["out_rate"])
+    render_map(sa_gdf, sa_pgdf, sc["title_rate"],
+               legend_items_rate, "추정 소아비만율", sc["lvname"], sa_out_rate)
+    shutil.copyfile(sa_out_rate, os.path.join(OUTDIR, sc["alt_rate"]))
+    print("저장: %s (%.1f KB) breaks=%s, 구역 %d개"
+          % (sc["out_rate"], os.path.getsize(sa_out_rate) / 1024, sa_breaks, len(sa_gdf)))
+
+    # ─── Gi* 핫스팟 지도 ───────────────────────────
+    sa_gdf["fill"] = sa_gdf["giClass"].apply(lambda g: GI_COLORS.get(g, "#dddddd"))
+    sa_counts = d["giCounts"]
+    legend_items_gi = []
+    for cls in GI_ORDER:
+        legend_items_gi.append(Patch(facecolor=GI_COLORS[cls], edgecolor="#999",
+                                     label="%s (%d)" % (cls, sa_counts.get(cls, 0))))
+    legend_items_gi.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
+                                  markeredgecolor="white", markersize=8, label=sc["lvname"]))
+    sa_out_gi = os.path.join(OUTDIR, sc["out_gi"])
+    render_map(sa_gdf, sa_pgdf, sc["title_gi"],
+               legend_items_gi, "Gi* (Queen, p<0.05/0.01)", sc["lvname"], sa_out_gi)
+    shutil.copyfile(sa_out_gi, os.path.join(OUTDIR, sc["alt_gi"]))
+    print("저장: %s (%.1f KB) Gi* counts=%s"
+          % (sc["out_gi"], os.path.getsize(sa_out_gi) / 1024, sa_counts))

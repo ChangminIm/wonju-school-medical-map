@@ -8,35 +8,42 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="data.js"></script>
 <script src="thiessen.js"></script>
+<script src="school_area.js"></script>
 <style>
 :root{--kk-green:#036b3f;--kk-green-dark:#024e2e}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI','Malgun Gothic',sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.topbar{background:linear-gradient(135deg,var(--kk-green-dark),var(--kk-green));color:#fff;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:1000}
+.topbar{background:linear-gradient(135deg,var(--kk-green-dark),var(--kk-green));color:#fff;padding:10px 18px;display:flex;align-items:center;gap:12px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:1000;flex-wrap:wrap}
 .topbar a.home{color:#fff;text-decoration:none;font-size:13px;opacity:.9;white-space:nowrap}
 .topbar a.home:hover{opacity:1}
-.topbar h1{font-size:16px;font-weight:700}
-.topbar .seg{margin-left:auto;display:flex;gap:6px;background:rgba(255,255,255,.15);padding:4px;border-radius:8px}
-.topbar .seg button{background:transparent;border:none;color:#fff;padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;opacity:.8}
+.topbar h1{font-size:15px;font-weight:700;white-space:nowrap}
+.topbar .seg{display:flex;gap:5px;background:rgba(255,255,255,.15);padding:4px;border-radius:8px}
+.topbar #basisSeg{margin-left:auto}
+.topbar .seg button{background:transparent;border:none;color:#fff;padding:6px 13px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;opacity:.8;white-space:nowrap}
 .topbar .seg button.active{background:#fff;color:var(--kk-green-dark);opacity:1}
-.topbar #metricSeg{margin-left:0}
 .topbar label.chk{display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer}
 #map{flex:1;z-index:0}
 
-.panel{position:absolute;top:64px;left:12px;z-index:1000;background:rgba(255,255,255,.96);border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.18);padding:14px 16px;font-size:12px;min-width:200px}
+.panel{position:absolute;top:90px;left:12px;z-index:1000;background:rgba(255,255,255,.96);border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.18);padding:14px 16px;font-size:12px;min-width:200px}
 .panel h4{font-size:13px;color:#333;margin-bottom:8px}
 .legend-row{display:flex;align-items:center;gap:8px;margin:4px 0}
 .legend-sw{width:18px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,.15);flex-shrink:0}
 .stats{margin-top:10px;padding-top:10px;border-top:1px solid #eee;color:#555}
-.stats div{display:flex;justify-content:space-between;margin:3px 0}
-.stats b{color:var(--kk-green)}
+.stats div{display:flex;justify-content:space-between;margin:3px 0;gap:10px}
+.stats b{color:var(--kk-green);text-align:right}
+.panel .note-basis{margin-top:8px;font-size:11px;color:#999}
 
 .info-popup h3{font-size:14px;margin:0 0 6px;color:#222}
 .info-popup table{width:100%;border-collapse:collapse}
-.info-popup td{padding:3px 6px;font-size:12px;border-bottom:1px solid #f0f0f0}
-.info-popup td:first-child{color:#666}
+.info-popup td{padding:3px 6px;font-size:12px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+.info-popup td:first-child{color:#666;white-space:nowrap}
 .info-popup td:last-child{text-align:right;color:#222;font-weight:600}
 .info-popup .rate{font-size:18px;font-weight:800;color:#bd0026}
+.info-popup .badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle}
+.info-popup .badge.s{background:#e2e8f0;color:#475569}
+.info-popup .badge.c{background:#fde68a;color:#92400e}
+.info-popup .schools{font-size:11px;color:#555;text-align:left!important;font-weight:400!important;line-height:1.4}
+.info-popup .note{font-size:11px;color:#888;margin-top:4px}
 .info-popup .also{font-size:11px;color:#888;margin-top:4px}
 </style>
 </head>
@@ -44,6 +51,10 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;height:100vh;display:flex
 <div class="topbar">
   <a class="home" href="index.html">← 메인으로</a>
   <h1>🟩 소아비만율 단계구분도 · 원주시</h1>
+  <div class="seg" id="basisSeg">
+    <button data-basis="thiessen" class="active">티센 영향권</button>
+    <button data-basis="area">통학구역</button>
+  </div>
   <div class="seg" id="levelSeg">
     <button data-level="elementary" class="active">초등학교</button>
     <button data-level="middle">중학교</button>
@@ -60,7 +71,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;height:100vh;display:flex
   <h4 id="legend-title">비만율 (%)</h4>
   <div id="legend"></div>
   <div class="stats" id="stats"></div>
-  <div style="margin-top:8px;font-size:11px;color:#999">티센 영향권 = 학교별 추정 학구</div>
+  <div class="note-basis" id="note-basis"></div>
 </div>
 
 <script>
@@ -81,9 +92,14 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',maxZoom:19
 }).addTo(map);
 
+let currentBasis='thiessen';
 let currentLevel='elementary';
 let currentMetric='rate';
 let polyLayer=null, pointLayer=null;
+
+function dataset(){
+  return currentBasis==='area'?SCHOOL_AREA_DATA[currentLevel]:THIESSEN_DATA[currentLevel];
+}
 
 function classIndex(rate,breaks){
   if(rate==null) return -1;
@@ -96,9 +112,7 @@ function colorForRate(rate,breaks){
   const i=classIndex(rate,breaks);
   return i<0?'#cccccc':COLORS[Math.min(i,COLORS.length-1)];
 }
-function colorForGi(cls){
-  return GI_COLORS[cls]||'#cccccc';
-}
+function colorForGi(cls){return GI_COLORS[cls]||'#cccccc';}
 
 function styleFor(props,breaks){
   if(currentMetric==='gi'){
@@ -107,7 +121,30 @@ function styleFor(props,breaks){
   return {fillColor:colorForRate(props.obeseRate,breaks),fillOpacity:0.75,color:'#fff',weight:1};
 }
 
-function popupHtml(p){
+// ── 통학구역 팝업 ──
+function areaPopup(p){
+  const noteRow=p.note?`<div class="note">※ ${p.note}</div>`:'';
+  const badge=p.gb==='단독'?'<span class="badge s">단독</span>':`<span class="badge c">${p.gb}</span>`;
+  const giRows=`<tr><td>Gi* Z</td><td>${p.giZ!=null?p.giZ.toFixed(2):'—'}</td></tr>`
+    +`<tr><td>Gi* p</td><td>${p.giP!=null?p.giP.toFixed(3):'—'}</td></tr>`;
+  if(currentMetric==='gi'){
+    const cls=p.giClass||'—';
+    return `<div class="info-popup"><h3>${p.name}${badge}</h3>`
+      +`<div class="rate" style="color:${GI_COLORS[cls]||'#888'}">${cls}</div>`
+      +`<table><tr><td>구성 학교</td><td class="schools">${p.schools} <b>(${p.schoolCount}교)</b></td></tr>`
+      +`<tr><td>비만율</td><td>${p.obeseRate}%</td></tr>`+giRows
+      +`</table>${noteRow}</div>`;
+  }
+  return `<div class="info-popup"><h3>${p.name}${badge}</h3>`
+    +`<div class="rate">${p.obeseRate}%</div>`
+    +`<table><tr><td>구성 학교</td><td class="schools">${p.schools} <b>(${p.schoolCount}교)</b></td></tr>`
+    +`<tr><td>학생 수</td><td>${p.students}명</td></tr>`
+    +`<tr><td>소아비만(추정)</td><td>약 ${Math.round(p.obese)}명</td></tr>`
+    +`</table>${noteRow}</div>`;
+}
+
+// ── 티센 영향권 팝업 ──
+function thiessenPopup(p){
   const alsoRow=p.also?`<div class="also">※ 영향권 공유: ${p.also}</div>`:'';
   const giRow=(p.giClass!=null)
     ? `<tr><td>Gi* 분류</td><td>${p.giClass}</td></tr>`
@@ -116,9 +153,8 @@ function popupHtml(p){
     : '';
   if(currentMetric==='gi'){
     const cls=p.giClass||'—';
-    const cls_color=GI_COLORS[cls]||'#888';
     return `<div class="info-popup"><h3>${p.name}</h3>`
-      +`<div class="rate" style="color:${cls_color}">${cls}</div>`
+      +`<div class="rate" style="color:${GI_COLORS[cls]||'#888'}">${cls}</div>`
       +`<table>`
       +`<tr><td>학교급</td><td>${p.level}</td></tr>`
       +`<tr><td>비만율</td><td>${p.obeseRate}%</td></tr>`
@@ -137,10 +173,14 @@ function popupHtml(p){
     +`</table>${alsoRow}</div>`;
 }
 
+function popupHtml(p){
+  return currentBasis==='area'?areaPopup(p):thiessenPopup(p);
+}
+
 function render(){
   if(polyLayer) map.removeLayer(polyLayer);
   if(pointLayer) map.removeLayer(pointLayer);
-  const d=THIESSEN_DATA[currentLevel];
+  const d=dataset();
   const breaks=d.breaks;
   polyLayer=L.geoJSON(d,{
     style:f=>styleFor(f.properties,breaks),
@@ -166,6 +206,9 @@ function render(){
   if(currentMetric==='gi') buildLegendGi(d);
   else buildLegendRate(breaks);
   buildStats(d);
+  document.getElementById('note-basis').textContent=
+    currentBasis==='area'?'통학구역 = 공식 학구 · 다수교 구역=구성교 평균'
+                         :'티센 영향권 = 학교별 추정 학구';
   try{map.fitBounds(polyLayer.getBounds(),{padding:[20,20]});}catch(e){}
 }
 
@@ -190,22 +233,32 @@ function buildLegendGi(d){
   });
 }
 function buildStats(d){
+  const unit=currentBasis==='area'?'통학구역':'영향권';
   if(currentMetric==='gi'){
     const counts=d.giCounts||{};
     const hot=(counts['Hot 99%']||0)+(counts['Hot 95%']||0);
     const cold=(counts['Cold 99%']||0)+(counts['Cold 95%']||0);
     document.getElementById('stats').innerHTML=
-      `<div><span>대상 영향권</span><b>${d.count}개</b></div>`+
+      `<div><span>대상 ${unit}</span><b>${d.count}개</b></div>`+
       `<div><span>Hot (유의)</span><b>${hot}개</b></div>`+
       `<div><span>Cold (유의)</span><b>${cold}개</b></div>`;
     return;
   }
+  const cntStr=currentBasis==='area'?`${d.count}개 (다수교 ${d.shared})`:`${d.count}개`;
   document.getElementById('stats').innerHTML=
-    `<div><span>대상 영향권</span><b>${d.count}개</b></div>`+
+    `<div><span>대상 ${unit}</span><b>${cntStr}</b></div>`+
     `<div><span>최소 / 최대</span><b>${d.min}% / ${d.max}%</b></div>`+
     `<div><span>평균 / 중앙값</span><b>${d.mean}% / ${d.median}%</b></div>`;
 }
 
+document.querySelectorAll('#basisSeg button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    if(b.dataset.basis===currentBasis) return;
+    currentBasis=b.dataset.basis;
+    document.querySelectorAll('#basisSeg button').forEach(x=>x.classList.toggle('active',x===b));
+    render();
+  });
+});
 document.querySelectorAll('#levelSeg button').forEach(b=>{
   b.addEventListener('click',()=>{
     if(b.dataset.level===currentLevel) return;

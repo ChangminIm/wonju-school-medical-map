@@ -100,14 +100,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
       <div class="icon">🟩</div>
       <span class="tag">원주</span>
       <h3>소아비만율 단계구분도</h3>
-      <p>티센폴리곤(학교별 영향권)을 기준으로 학교별 소아비만율을 단계구분도로 시각화합니다. 초등·중학교를 전환하며 영향권별 비만율 분포를 비교할 수 있습니다.</p>
-      <span class="go">맵 열기 →</span>
-    </a>
-    <a class="map-card" href="school_area.html">
-      <div class="icon">🟦</div>
-      <span class="tag">원주</span>
-      <h3>통학구역 소아비만율 단계구분도</h3>
-      <p>공식 초등학교 통학구역(56개)을 기준으로 소아비만율을 단계구분도로 시각화합니다. 공동통학구역은 구성 학교 평균, 통학구역 미지정 학교(원주삼육초)는 공간 중첩되는 무실초 구역에 합산하며, Gi* 핫스팟까지 제공합니다.</p>
+      <p>티센 영향권과 공식 통학구역(초등 56·중등 8) 두 기준을 토글로 전환하며 소아비만율을 단계구분도로 비교합니다. 초등·중학교, 비만율·Gi* 핫스팟까지 함께 제공합니다. 통학구역은 공동/학교군=구성교 평균으로 처리합니다.</p>
       <span class="go">맵 열기 →</span>
     </a>
     <a class="map-card" href="2sfca/index.html">
@@ -119,7 +112,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
     </a>
   </div>
 
-  <div class="section-title">📈 결과 지도 <span class="cnt">(총 6개)</span></div>
+  <div class="section-title">📈 결과 지도 <span class="cnt">(총 8개)</span></div>
   <div class="results">
     <div class="result-card">
       <a class="thumb" href="maps/wonju_elem_obesity.png" target="_blank" rel="noopener">
@@ -185,6 +178,28 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
         <div class="meta">686 KB · 클릭 시 원본</div>
         <div class="desc">통학구역 Queen 인접 기반 Getis-Ord Gi* (permutations=999). Hot 99% 2 · Hot 95% 4 · Cold 95% 6 · 나머지는 통계적 비유의</div>
         <a class="dl" href="maps/wonju_elem_area_gi.png" download="원주_초등학교_통학구역_소아비만_Gi.png">⬇ PNG 다운로드</a>
+      </div>
+    </div>
+    <div class="result-card">
+      <a class="thumb" href="maps/wonju_mid_area_obesity.png" target="_blank" rel="noopener">
+        <img src="maps/wonju_mid_area_obesity.png" alt="원주 중학교 통학구역 소아비만율 단계구분도">
+      </a>
+      <div class="body">
+        <h3>07. 원주 중학 통학구역 소아비만율</h3>
+        <div class="meta">638 KB · 클릭 시 원본</div>
+        <div class="desc">중학교 학구·학교군 8개 기준 · 학교군(원주시·서부지역)=구성교 평균(방송통신중 제외) · 추정 소아비만율(0~17.0%) 분위수 5등급 단계구분도</div>
+        <a class="dl" href="maps/wonju_mid_area_obesity.png" download="원주_중학교_통학구역_소아비만율.png">⬇ PNG 다운로드</a>
+      </div>
+    </div>
+    <div class="result-card">
+      <a class="thumb" href="maps/wonju_mid_area_gi.png" target="_blank" rel="noopener">
+        <img src="maps/wonju_mid_area_gi.png" alt="원주 중학교 통학구역 소아비만율 Gi* 핫스팟">
+      </a>
+      <div class="body">
+        <h3>08. 원주 중학 통학구역 Gi* 핫스팟</h3>
+        <div class="meta">628 KB · 클릭 시 원본</div>
+        <div class="desc">통학구역 Queen 인접 기반 Getis-Ord Gi* (permutations=999). 구역 8개로 표본이 작아 Cold 95% 1 외 통계적 비유의</div>
+        <a class="dl" href="maps/wonju_mid_area_gi.png" download="원주_중학교_통학구역_소아비만_Gi.png">⬇ PNG 다운로드</a>
       </div>
     </div>
   </div>
