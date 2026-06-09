@@ -87,11 +87,11 @@ const GI_COLORS={
 const GI_ORDER=['Hot 99%','Hot 95%','Not Significant','Cold 95%','Cold 99%'];
 // 범례 표기용 핫스팟 분류 라벨
 const GI_LABEL={
-  'Hot 99%':'Hotspot (p-value <0.01)',
-  'Hot 95%':'Hotspot (p-value <0.05)',
+  'Hot 99%':'Hotspot(p-value <0.01)',
+  'Hot 95%':'Hotspot(p-value <0.05)',
   'Not Significant':'Not Significant',
-  'Cold 95%':'Coldspot (p-value <0.05)',
-  'Cold 99%':'Coldspot (p-value <0.01)'
+  'Cold 95%':'Coldspot(p-value <0.05)',
+  'Cold 99%':'Coldspot(p-value <0.01)'
 };
 
 const map=L.map('map',{zoomControl:false}).setView([37.342,127.94],11);
@@ -226,11 +226,9 @@ function buildLegendRate(breaks){
 function buildLegendGi(d){
   const el=document.getElementById('legend');
   el.innerHTML='';
-  const counts=d.giCounts||{};
   GI_ORDER.forEach(cls=>{
     const row=document.createElement('div');row.className='legend-row';
-    const n=counts[cls]||0;
-    row.innerHTML=`<span class="legend-sw" style="background:${GI_COLORS[cls]}"></span><span>${GI_LABEL[cls]} <span style="color:#888">(${n})</span></span>`;
+    row.innerHTML=`<span class="legend-sw" style="background:${GI_COLORS[cls]}"></span><span>${GI_LABEL[cls]}</span>`;
     el.appendChild(row);
   });
 }

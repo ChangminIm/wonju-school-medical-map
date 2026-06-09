@@ -32,11 +32,11 @@ GI_COLORS = {
 }
 GI_ORDER = ["Hot 99%", "Hot 95%", "Not Significant", "Cold 95%", "Cold 99%"]
 GI_LABEL = {
-    "Hot 99%": "Hotspot (p-value <0.01)",
-    "Hot 95%": "Hotspot (p-value <0.05)",
+    "Hot 99%": "Hotspot(p-value <0.01)",
+    "Hot 95%": "Hotspot(p-value <0.05)",
     "Not Significant": "Not Significant",
-    "Cold 95%": "Coldspot (p-value <0.05)",
-    "Cold 99%": "Coldspot (p-value <0.01)",
+    "Cold 95%": "Coldspot(p-value <0.05)",
+    "Cold 99%": "Coldspot(p-value <0.01)",
 }
 
 with open(os.path.join(BASE, "map_data.json"), encoding="utf-8") as f:
@@ -274,7 +274,7 @@ for level, c in CONF.items():
     for cls in GI_ORDER:
         n = counts.get(cls, 0)
         legend_items_gi.append(Patch(facecolor=GI_COLORS[cls], edgecolor="#999",
-                                     label="%s (%d)" % (GI_LABEL[cls], n)))
+                                     label=GI_LABEL[cls]))
     legend_items_gi.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
                                   markeredgecolor="white", markersize=8, label=c["lvname"]))
     out_gi = os.path.join(OUTDIR, c["out_gi"])
@@ -347,7 +347,7 @@ for level, sc in SA_CONF.items():
     legend_items_gi = []
     for cls in GI_ORDER:
         legend_items_gi.append(Patch(facecolor=GI_COLORS[cls], edgecolor="#999",
-                                     label="%s (%d)" % (GI_LABEL[cls], sa_counts.get(cls, 0))))
+                                     label=GI_LABEL[cls]))
     legend_items_gi.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
                                   markeredgecolor="white", markersize=8, label=sc["lvname"]))
     sa_out_gi = os.path.join(OUTDIR, sc["out_gi"])
