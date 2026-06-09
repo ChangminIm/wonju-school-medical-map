@@ -61,7 +61,16 @@ a{color:inherit}
 .result-card .dl{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;background:#e8f5ee;color:var(--kk-green);border:1px solid #cde8d8;padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:600;text-decoration:none}
 .result-card .dl:hover{background:var(--kk-green);color:#fff;border-color:var(--kk-green)}
 
+.theme{border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;background:#fbfcfb}
+.theme>summary{cursor:pointer;list-style:none;padding:14px 18px;font-size:15px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px}
+.theme>summary::-webkit-details-marker{display:none}
+.theme>summary::before{content:'▸';color:var(--kk-green);font-size:13px;transition:transform .15s}
+.theme[open]>summary::before{transform:rotate(90deg)}
+.theme>summary .scnt{font-size:12px;font-weight:500;color:var(--muted)}
+.theme .results{margin:0;padding:2px 18px 20px}
+
 footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 40px;border-top:1px solid var(--border)}
+footer .credit{margin-top:8px;font-weight:600;color:var(--kk-green)}
 </style>
 </head>
 <body>
@@ -112,14 +121,17 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
     </a>
   </div>
 
-  <div class="section-title">📈 결과 지도 · 원주 <span class="cnt">(9개)</span></div>
-  <div class="results">
+  <div class="section-title">📈 결과 지도 · 원주</div>
+
+  <details class="theme" open>
+    <summary>티센 영향권 기준 <span class="scnt">· 4종</span></summary>
+    <div class="results">
     <div class="result-card">
       <a class="thumb" href="maps/wonju_elem_obesity.png" target="_blank" rel="noopener">
         <img src="maps/wonju_elem_obesity.png" alt="원주 초등학교 소아비만율 단계구분도">
       </a>
       <div class="body">
-        <h3>01. 원주 초등학교 소아비만율</h3>
+        <h3>원주 초등학교 소아비만율 (티센폴리곤 기준)</h3>
         <div class="meta">681 KB · 클릭 시 원본</div>
         <div class="desc">초등학교 51교 · 티센 영향권 기준 · 추정 소아비만율(2.9~7.6%) 분위수 5등급 단계구분도</div>
         <a class="dl" href="maps/wonju_elem_obesity.png" download="원주_초등학교_소아비만율.png">⬇ PNG 다운로드</a>
@@ -130,7 +142,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
         <img src="maps/wonju_mid_obesity.png" alt="원주 중학교 소아비만율 단계구분도">
       </a>
       <div class="body">
-        <h3>02. 원주 중학교 소아비만율</h3>
+        <h3>원주 중학교 소아비만율 (티센폴리곤 기준)</h3>
         <div class="meta">645 KB · 클릭 시 원본</div>
         <div class="desc">중학교 25교 · 티센 영향권 기준 · 추정 소아비만율(0~22.3%) 분위수 5등급 단계구분도</div>
         <a class="dl" href="maps/wonju_mid_obesity.png" download="원주_중학교_소아비만율.png">⬇ PNG 다운로드</a>
@@ -141,7 +153,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
         <img src="maps/wonju_elem_gi.png" alt="원주 초등학교 소아비만율 Gi* 핫스팟">
       </a>
       <div class="body">
-        <h3>03. 원주 초등학교 Gi* 핫스팟</h3>
+        <h3>원주 초등학교 Gi* 핫스팟 (티센폴리곤 기준)</h3>
         <div class="meta">669 KB · 클릭 시 원본</div>
         <div class="desc">초등학교 티센 Queen 인접 기반 Getis-Ord Gi* (permutations=999). Hot 99% 3 · Hot 95% 3 · Cold 99% 1 · Cold 95% 3</div>
         <a class="dl" href="maps/wonju_elem_gi.png" download="원주_초등학교_소아비만_Gi.png">⬇ PNG 다운로드</a>
@@ -152,18 +164,24 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
         <img src="maps/wonju_mid_gi.png" alt="원주 중학교 소아비만율 Gi* 핫스팟">
       </a>
       <div class="body">
-        <h3>04. 원주 중학교 Gi* 핫스팟</h3>
+        <h3>원주 중학교 Gi* 핫스팟 (티센폴리곤 기준)</h3>
         <div class="meta">639 KB · 클릭 시 원본</div>
         <div class="desc">중학교 티센 Queen 인접 기반 Getis-Ord Gi* (permutations=999). Hot 95% 1 · 나머지는 통계적 비유의</div>
         <a class="dl" href="maps/wonju_mid_gi.png" download="원주_중학교_소아비만_Gi.png">⬇ PNG 다운로드</a>
       </div>
     </div>
+    </div>
+  </details>
+
+  <details class="theme">
+    <summary>통학구역 기준 <span class="scnt">· 4종</span></summary>
+    <div class="results">
     <div class="result-card">
       <a class="thumb" href="maps/wonju_elem_area_obesity.png" target="_blank" rel="noopener">
         <img src="maps/wonju_elem_area_obesity.png" alt="원주 초등학교 통학구역 소아비만율 단계구분도">
       </a>
       <div class="body">
-        <h3>05. 원주 초등 통학구역 소아비만율</h3>
+        <h3>원주 초등학교 소아비만율 (통학구역 기준)</h3>
         <div class="meta">700 KB · 클릭 시 원본</div>
         <div class="desc">공식 통학구역 56개(공동 6) 기준 · 공동구역=구성교 평균, 원주삼육초→무실초 구역 합산 · 추정 소아비만율(2.9~7.6%) 분위수 5등급 단계구분도</div>
         <a class="dl" href="maps/wonju_elem_area_obesity.png" download="원주_초등학교_통학구역_소아비만율.png">⬇ PNG 다운로드</a>
@@ -174,7 +192,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
         <img src="maps/wonju_elem_area_gi.png" alt="원주 초등학교 통학구역 소아비만율 Gi* 핫스팟">
       </a>
       <div class="body">
-        <h3>06. 원주 초등 통학구역 Gi* 핫스팟</h3>
+        <h3>원주 초등학교 Gi* 핫스팟 (통학구역 기준)</h3>
         <div class="meta">686 KB · 클릭 시 원본</div>
         <div class="desc">통학구역 Queen 인접 기반 Getis-Ord Gi* (permutations=999). Hot 99% 2 · Hot 95% 4 · Cold 95% 6 · 나머지는 통계적 비유의</div>
         <a class="dl" href="maps/wonju_elem_area_gi.png" download="원주_초등학교_통학구역_소아비만_Gi.png">⬇ PNG 다운로드</a>
@@ -185,7 +203,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
         <img src="maps/wonju_mid_area_obesity.png" alt="원주 중학교 통학구역 소아비만율 단계구분도">
       </a>
       <div class="body">
-        <h3>07. 원주 중학 통학구역 소아비만율</h3>
+        <h3>원주 중학교 소아비만율 (통학구역 기준)</h3>
         <div class="meta">638 KB · 클릭 시 원본</div>
         <div class="desc">중학교 학구·학교군 8개 기준 · 학교군(원주시·서부지역)=구성교 평균(방송통신중 제외) · 추정 소아비만율(0~17.0%) 분위수 5등급 단계구분도</div>
         <a class="dl" href="maps/wonju_mid_area_obesity.png" download="원주_중학교_통학구역_소아비만율.png">⬇ PNG 다운로드</a>
@@ -196,42 +214,74 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:28px 24px 4
         <img src="maps/wonju_mid_area_gi.png" alt="원주 중학교 통학구역 소아비만율 Gi* 핫스팟">
       </a>
       <div class="body">
-        <h3>08. 원주 중학 통학구역 Gi* 핫스팟</h3>
+        <h3>원주 중학교 Gi* 핫스팟 (통학구역 기준)</h3>
         <div class="meta">628 KB · 클릭 시 원본</div>
         <div class="desc">통학구역 Queen 인접 기반 Getis-Ord Gi* (permutations=999). 구역 8개로 표본이 작아 Cold 95% 1 외 통계적 비유의</div>
         <a class="dl" href="maps/wonju_mid_area_gi.png" download="원주_중학교_통학구역_소아비만_Gi.png">⬇ PNG 다운로드</a>
       </div>
     </div>
+    </div>
+  </details>
+
+  <details class="theme">
+    <summary>2SFCA 의료 접근성 <span class="scnt">· 2종</span></summary>
+    <div class="results">
     <div class="result-card">
       <a class="thumb" href="maps/wonju_2sfca_access.png" target="_blank" rel="noopener">
         <img src="maps/wonju_2sfca_access.png" alt="원주 2SFCA 의료 접근성">
       </a>
       <div class="body">
-        <h3>09. 원주 2SFCA 의료 접근성</h3>
+        <h3>원주 2SFCA 의료 접근성</h3>
         <div class="meta">578 KB · 클릭 시 원본</div>
-        <div class="desc">500m 인구격자 2SFCA(소아+내과 전문의·3km) 접근성 지수. 인구 0 격자는 회색 처리.</div>
+        <div class="desc">500m 인구격자 2SFCA(소아+내과 전문의 · 3km) 접근성 지수. 접근불가는 척도 0, 인구 0 격자는 회색.</div>
         <a class="dl" href="maps/wonju_2sfca_access.png" download="원주_2sfca_접근성.png">⬇ PNG 다운로드</a>
       </div>
     </div>
-  </div>
+    <div class="result-card">
+      <a class="thumb" href="maps/wonju_e2sfca_access.png" target="_blank" rel="noopener">
+        <img src="maps/wonju_e2sfca_access.png" alt="원주 E2SFCA 의료 접근성">
+      </a>
+      <div class="body">
+        <h3>원주 E2SFCA 의료 접근성</h3>
+        <div class="meta">577 KB · 클릭 시 원본</div>
+        <div class="desc">500m 인구격자 E2SFCA(가우시안 거리감쇠 · 소아+내과 · 3km) 접근성 지수. 접근불가는 척도 0, 인구 0 격자는 회색.</div>
+        <a class="dl" href="maps/wonju_e2sfca_access.png" download="원주_e2sfca_접근성.png">⬇ PNG 다운로드</a>
+      </div>
+    </div>
+    </div>
+  </details>
 
-  <div class="section-title">📈 결과 지도 · 용인 <span class="cnt">(1개)</span></div>
-  <div class="results">
+  <div class="section-title">📈 결과 지도 · 용인</div>
+  <details class="theme" open>
+    <summary>2SFCA 의료 접근성 <span class="scnt">· 2종</span></summary>
+    <div class="results">
     <div class="result-card">
       <a class="thumb" href="maps/yongin_2sfca_access.png" target="_blank" rel="noopener">
         <img src="maps/yongin_2sfca_access.png" alt="용인 2SFCA 의료 접근성">
       </a>
       <div class="body">
-        <h3>01. 용인 2SFCA 의료 접근성</h3>
+        <h3>용인 2SFCA 의료 접근성</h3>
         <div class="meta">758 KB · 클릭 시 원본</div>
-        <div class="desc">500m 인구격자 2SFCA(소아+내과 전문의·3km) 접근성 지수. 인구 0 격자는 회색 처리.</div>
+        <div class="desc">500m 인구격자 2SFCA(소아+내과 전문의 · 3km) 접근성 지수. 접근불가는 척도 0, 인구 0 격자는 회색.</div>
         <a class="dl" href="maps/yongin_2sfca_access.png" download="용인_2sfca_접근성.png">⬇ PNG 다운로드</a>
       </div>
     </div>
-  </div>
+    <div class="result-card">
+      <a class="thumb" href="maps/yongin_e2sfca_access.png" target="_blank" rel="noopener">
+        <img src="maps/yongin_e2sfca_access.png" alt="용인 E2SFCA 의료 접근성">
+      </a>
+      <div class="body">
+        <h3>용인 E2SFCA 의료 접근성</h3>
+        <div class="meta">759 KB · 클릭 시 원본</div>
+        <div class="desc">500m 인구격자 E2SFCA(가우시안 거리감쇠 · 소아+내과 · 3km) 접근성 지수. 접근불가는 척도 0, 인구 0 격자는 회색.</div>
+        <a class="dl" href="maps/yongin_e2sfca_access.png" download="용인_e2sfca_접근성.png">⬇ PNG 다운로드</a>
+      </div>
+    </div>
+    </div>
+  </details>
 </div>
 
-<footer>GIS 기반 소아비만 종합 분석 플랫폼 · 데이터 기준 2026</footer>
+<footer>GIS 기반 소아비만 종합 분석 플랫폼 · 데이터 기준 2026<div class="credit">made by 국립공주대학교 임창민</div></footer>
 
 </body>
 </html>

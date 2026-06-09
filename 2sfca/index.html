@@ -133,7 +133,7 @@ let geoLayer=null,boundaryLayer=null;
 
 const BLUE9=['#f7fbff','#deebf7','#c6dbef','#9ecae1','#6baed6','#4292c6','#2171b5','#08519c','#08306b'];
 const GI_COLORS={hotspot:'#dc2626',cold:'#2563eb',notSig:'#e2e8f0'};
-const ACCESS_NONE='#ef9a9a'; // 접근불가(인구 있으나 공급 0) = 연한 빨강
+const ACCESS_ZERO='#eaf0fb'; // 접근성 0(접근불가, 인구○·공급0) = 척도 바닥
 const EMPTY_STYLE={fillColor:'#f1f5f9',fillOpacity:0.35,weight:0.2,color:'#cbd5e1',opacity:0.5};
 
 function D(){return SFCA_DATA[currentRegion];}
@@ -150,7 +150,7 @@ function normalize(values){
   return values.map(v=>v<=0?0:Math.min((v-mn)/(mx-mn),1));
 }
 function colorFromPalette(norm,palette){
-  if(norm<=0)return ACCESS_NONE;
+  if(norm<=0)return ACCESS_ZERO; // 접근성 0 = 척도 바닥
   const idx=Math.min(Math.floor(norm*(palette.length-1)),palette.length-1);
   return palette[idx];
 }
@@ -212,7 +212,7 @@ function updateStats(raw,norm,features){
   document.getElementById('gradient-bar').style.background=`linear-gradient(to right,${BLUE9.join(',')})`;
   document.getElementById('leg-min').textContent='0 (낮음)';
   document.getElementById('leg-max').textContent='1.0 (높음)';
-  document.getElementById('legend-items').innerHTML=`<div class="legend-item"><div class="legend-swatch" style="background:${ACCESS_NONE}"></div>접근불가 (인구○·공급 0)</div>`;
+  document.getElementById('legend-items').innerHTML=`<div class="legend-item"><div class="legend-swatch" style="background:${ACCESS_ZERO}"></div>0 (접근불가 · 인구○·공급0)</div>`;
 }
 
 function updateGiStats(zv,pv,features){

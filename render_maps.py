@@ -260,7 +260,7 @@ for level, c in CONF.items():
                                     markeredgecolor="white", markersize=8, label=c["lvname"]))
     out_rate = os.path.join(OUTDIR, c["out_rate"])
     render_map(gdf, pgdf, c["title_rate"], legend_items_rate, "추정 소아비만율",
-               c["lvname"], out_rate)
+               c["lvname"], out_rate, subtitle="(티센폴리곤 기준)")
     shutil.copyfile(out_rate, os.path.join(OUTDIR, c["alt_rate"]))
     sz = os.path.getsize(out_rate) / 1024
     print("저장: %s (%.1f KB) breaks=%s, 학교 %d개" % (c["out_rate"], sz, breaks, len(pts)))
@@ -297,7 +297,7 @@ SA = json.loads(sa_txt[sa_txt.index("{"):sa_txt.rindex("}") + 1])
 SA_CONF = {
     "elementary": {
         "lvname": "초등학교",
-        "title_rate": "원주시 초등학교 통학구역 소아비만율 분포",
+        "title_rate": "원주시 초등학교 소아비만율 분포",
         "title_gi": "원주시 초등학교 소아비만율 핫스팟",
         "out_rate": "원주_초등학교_통학구역_소아비만율.png",
         "out_gi": "원주_초등학교_통학구역_소아비만_Gi.png",
@@ -306,7 +306,7 @@ SA_CONF = {
     },
     "middle": {
         "lvname": "중학교",
-        "title_rate": "원주시 중학교 통학구역 소아비만율 분포",
+        "title_rate": "원주시 중학교 소아비만율 분포",
         "title_gi": "원주시 중학교 소아비만율 핫스팟",
         "out_rate": "원주_중학교_통학구역_소아비만율.png",
         "out_gi": "원주_중학교_통학구역_소아비만_Gi.png",
@@ -338,7 +338,7 @@ for level, sc in SA_CONF.items():
                                     markeredgecolor="white", markersize=8, label=sc["lvname"]))
     sa_out_rate = os.path.join(OUTDIR, sc["out_rate"])
     render_map(sa_gdf, sa_pgdf, sc["title_rate"],
-               legend_items_rate, "추정 소아비만율", sc["lvname"], sa_out_rate)
+               legend_items_rate, "추정 소아비만율", sc["lvname"], sa_out_rate, subtitle="(통학구역 기준)")
     shutil.copyfile(sa_out_rate, os.path.join(OUTDIR, sc["alt_rate"]))
     print("저장: %s (%.1f KB) breaks=%s, 구역 %d개"
           % (sc["out_rate"], os.path.getsize(sa_out_rate) / 1024, sa_breaks, len(sa_gdf)))
@@ -361,18 +361,21 @@ for level, sc in SA_CONF.items():
 
 
 # ──────────────────────────────────────────────────────────────
-# 2SFCA 접근성 PNG (용인·원주) — 2sfca/result.js 기반
-# 기본 조합: 2SFCA · 소아+내과 · 3km. 빈격자(인구0)=회색. 5등급 분위수 + 블루 팔레트.
+# 2SFCA / E2SFCA 접근성 PNG (용인·원주) — 2sfca/result.js 기반
+# 소아+내과 전문의 · 3km. 빈격자(인구0)=회색. 접근불가(A=0)=척도 바닥 '0'. 양수 5등급 블루.
 # ──────────────────────────────────────────────────────────────
-ACCESS_COLORS = ["#deebf7", "#9ecae1", "#6baed6", "#3182bd", "#08519c"]
-ACCESS_NONE = "#ef9a9a"   # 접근불가(인구 있으나 공급 0) = 연한 빨강(사각지대 강조)
-SF_KEY = "2sfca_ped_inter_3000"
+ACCESS_ZERO = "#eaf0fb"   # 접근성 0(접근불가, 인구○·공급0) = 척도 바닥
+ACCESS_COLORS = ["#c6dbef", "#9ecae1", "#6baed6", "#3182bd", "#08519c"]   # 양수 5등급
 sf_txt = open(os.path.join(BASE, "2sfca", "result.js"), encoding="utf-8").read()
 SF = json.loads(sf_txt[sf_txt.index("{"):sf_txt.rindex("}") + 1])
 
-SF_CONF = {
-    "yongin": {"label": "용인시", "out": "용인_2sfca_접근성.png", "alt": "yongin_2sfca_access.png"},
-    "wonju": {"label": "원주시", "out": "원주_2sfca_접근성.png", "alt": "wonju_2sfca_access.png"},
+SF_REGION = {
+    "yongin": {"label": "용인시", "ko": "용인", "en": "yongin"},
+    "wonju": {"label": "원주시", "ko": "원주", "en": "wonju"},
+}
+SF_METHOD = {
+    "2sfca": "(2SFCA · 소아+내과 전문의 · 3km)",
+    "e2sfca": "(E2SFCA · 소아+내과 전문의 · 3km)",
 }
 
 
@@ -387,55 +390,55 @@ def normalize_access(vals):
     return [0.0 if v <= 0 else min((v - mn) / (mx - mn), 1.0) for v in vals]
 
 
-for reg, sc in SF_CONF.items():
+for reg, rc in SF_REGION.items():
     rd = SF[reg]
-    acc = rd["surfaces"][SF_KEY]
-    norm = normalize_access(acc)
     feats = rd["geojson"]["features"]
-
-    gdf = gpd.GeoDataFrame.from_features(feats, crs="EPSG:4326").to_crs(epsg=5179)
-    gdf["pop"] = [f["properties"]["pop"] for f in feats]
-    gdf["acc"] = [acc[f["properties"]["id"]] for f in feats]
-    gdf["nrm"] = [norm[f["properties"]["id"]] for f in feats]
-
-    pos_norm = [n for n in norm if n > 0]
-    edges = list(np.quantile(pos_norm, [0, .2, .4, .6, .8, 1.0]))
-
-    def fill_of(row):
-        if row["pop"] <= 0:
-            return "#d9d9d9"          # 빈격자(인구0) = 회색
-        if row["acc"] <= 0:
-            return ACCESS_NONE        # 인구 있으나 접근불가 = 빨강
-        n = row["nrm"]
-        for i in range(5):
-            if n <= edges[i + 1] or i == 4:
-                return ACCESS_COLORS[i]
-        return ACCESS_COLORS[-1]
-
-    gdf["fill"] = gdf.apply(fill_of, axis=1)
-
-    # 전문의(소아+내과) 보유 기관 점
+    pops = [f["properties"]["pop"] for f in feats]
     fac = [m for m in ALL[reg]["medical"] if (m.get("ped", 0) + m.get("inter", 0)) > 0]
     pgdf = gpd.GeoDataFrame(
         {"name": [m["name"] for m in fac]},
         geometry=[Point(m["lng"], m["lat"]) for m in fac],
         crs="EPSG:4326",
     ).to_crs(epsg=5179)
+    base_gdf = gpd.GeoDataFrame.from_features(feats, crs="EPSG:4326").to_crs(epsg=5179)
+    base_gdf["pop"] = pops
 
-    legend_items = []
-    for i in range(4, -1, -1):
-        legend_items.append(Patch(facecolor=ACCESS_COLORS[i], edgecolor="#999",
-                                  label="%.2f ~ %.2f" % (edges[i], edges[i + 1])))
-    legend_items.append(Patch(facecolor=ACCESS_NONE, edgecolor="#999", label="접근불가 (인구○·공급0)"))
-    legend_items.append(Patch(facecolor="#d9d9d9", edgecolor="#999", label="인구 없음"))
-    legend_items.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
-                               markeredgecolor="white", markersize=7, label="전문의 보유 기관"))
+    for method, sub in SF_METHOD.items():
+        acc = rd["surfaces"]["%s_ped_inter_3000" % method]
+        norm = normalize_access(acc)
+        edges = list(np.quantile([n for n in norm if n > 0], [0, .2, .4, .6, .8, 1.0]))
 
-    out = os.path.join(OUTDIR, sc["out"])
-    render_map(gdf, pgdf, "%s 초등학생 의료 접근성" % sc["label"], legend_items,
-               "접근성 지수 (정규화)", "", out,
-               subtitle="(2SFCA · 소아+내과 전문의 · 3km)", point_size=5, edge_lw=0.15)
-    shutil.copyfile(out, os.path.join(OUTDIR, sc["alt"]))
-    print("저장: %s (%.1f KB) 격자 %d, 전문의기관 %d, edges=%s"
-          % (sc["out"], os.path.getsize(out) / 1024, len(gdf), len(fac),
-             [round(e, 3) for e in edges]))
+        gdf = base_gdf.copy()
+        gdf["acc"] = [acc[f["properties"]["id"]] for f in feats]
+        gdf["nrm"] = [norm[f["properties"]["id"]] for f in feats]
+
+        def fill_of(row):
+            if row["pop"] <= 0:
+                return "#d9d9d9"          # 빈격자(인구0) = 회색
+            if row["acc"] <= 0:
+                return ACCESS_ZERO        # 접근불가 = 접근성 0 (척도 바닥)
+            n = row["nrm"]
+            for i in range(5):
+                if n <= edges[i + 1] or i == 4:
+                    return ACCESS_COLORS[i]
+            return ACCESS_COLORS[-1]
+
+        gdf["fill"] = gdf.apply(fill_of, axis=1)
+
+        legend_items = []
+        for i in range(4, -1, -1):
+            legend_items.append(Patch(facecolor=ACCESS_COLORS[i], edgecolor="#999",
+                                      label="%.2f ~ %.2f" % (edges[i], edges[i + 1])))
+        legend_items.append(Patch(facecolor=ACCESS_ZERO, edgecolor="#999", label="0 (접근불가)"))
+        legend_items.append(Patch(facecolor="#d9d9d9", edgecolor="#999", label="인구 없음"))
+        legend_items.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
+                                   markeredgecolor="white", markersize=7, label="전문의 보유 기관"))
+
+        out = os.path.join(OUTDIR, "%s_%s_접근성.png" % (rc["ko"], method))
+        render_map(gdf, pgdf, "%s 초등학생 의료 접근성" % rc["label"], legend_items,
+                   "접근성 지수 (정규화)", "", out,
+                   subtitle=sub, point_size=5, edge_lw=0.15)
+        shutil.copyfile(out, os.path.join(OUTDIR, "%s_%s_access.png" % (rc["en"], method)))
+        print("저장: %s_%s_접근성.png (%.1f KB) 격자 %d, edges=%s"
+              % (rc["ko"], method, os.path.getsize(out) / 1024, len(gdf),
+                 [round(e, 3) for e in edges]))
