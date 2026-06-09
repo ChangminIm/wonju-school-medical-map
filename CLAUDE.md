@@ -18,7 +18,7 @@ Leaflet 지도 3종 + matplotlib 정적 PNG + Python 전처리/공간분석.
 | `/` | `index.html` | 메인 랜딩 + 결과 PNG |
 | `/access.html` | `access.html` | 학교·의료·늘봄 접근성 지도 |
 | `/choropleth.html` | `choropleth.html` | 원주 티센 비만율 |
-| `/2sfca/` | `2sfca/index.html` | 용인 500m 2SFCA/KDE/Gi* |
+| `/2sfca/` | `2sfca/index.html` | 용인·원주 500m 2SFCA/Gi*(Queen) · 지역 토글 |
 
 ---
 
@@ -28,7 +28,7 @@ Leaflet 지도 3종 + matplotlib 정적 PNG + Python 전처리/공간분석.
 |------|------|------|
 | `data.js` | `convert_data.py` | ALL_DATA (학교·의료·늘봄·obeseRate) |
 | `thiessen.js` | `thiessen_build.py` | THIESSEN_DATA (원주 폴리곤) |
-| `2sfca/result.js` | `2sfca/analyze.py` | 격자별 2SFCA/KDE/Gi* |
+| `2sfca/result.js` | `2sfca/analyze.py` | 용인·원주 격자별 2SFCA/E2SFCA/Gi*(Queen). 컬럼형 {지역:{surfaces,gi,boundary}} |
 
 `convert_data.py`, `data/`, `map_data.json` → **.gitignore** (로컬 원본 필요)
 

@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2SFCA 접근성 분석 - 용인시 초등학생</title>
+<title>2SFCA 의료 접근성 분석 · 용인·원주</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="result.js"></script>
-<script src="boundary.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh;overflow:hidden}
@@ -21,7 +20,6 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
 .btn-group{display:flex;gap:4px;flex-wrap:wrap}
 .btn-toggle{padding:6px 12px;font-size:12px;border:1px solid #cbd5e1;border-radius:5px;background:#fff;cursor:pointer;transition:all .15s;color:#475569;font-weight:500}
 .btn-toggle.active{background:#4a90d9;color:#fff;border-color:#4a90d9}
-.btn-toggle.active-orange{background:#ea580c;color:#fff;border-color:#ea580c}
 .btn-toggle.active-green{background:#16a34a;color:#fff;border-color:#16a34a}
 .stat-section{padding:12px 20px;border-bottom:1px solid #eee}
 .stat-section h3{font-size:13px;color:#475569;margin-bottom:8px;font-weight:600}
@@ -45,14 +43,13 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
   <div class="panel-header">
     <a href="../index.html" style="display:inline-block;font-size:12px;color:#036b3f;text-decoration:none;margin-bottom:6px">← 메인으로</a>
     <h1>2SFCA 의료 접근성 분석</h1>
-    <p>용인시 초등학생 인구 · 500m 격자 · <span id="grid-info"></span></p>
+    <p><span id="region-label">용인시</span> 초등학생 · 500m 격자 · <span id="grid-info"></span></p>
   </div>
   <div class="control-section">
-    <h3>표시 레이어</h3>
-    <div class="btn-group" id="layer-btns">
-      <button class="btn-toggle active" data-val="sfca">접근성 지수</button>
-      <button class="btn-toggle" data-val="kde">KDE 밀도</button>
-      <button class="btn-toggle" data-val="gi">Gi* 핫스팟</button>
+    <h3>지역</h3>
+    <div class="btn-group" id="region-btns">
+      <button class="btn-toggle active" data-val="yongin">용인시</button>
+      <button class="btn-toggle" data-val="wonju">원주시</button>
     </div>
   </div>
   <div class="control-section">
@@ -61,6 +58,11 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
       <button class="btn-toggle active" data-val="2sfca">2SFCA</button>
       <button class="btn-toggle" data-val="e2sfca">E2SFCA (Gaussian)</button>
     </div>
+    <p style="font-size:11px;color:#94a3b8;margin-top:7px;line-height:1.5">
+      2단계 유동지역법: ①기관별 (전문의÷주변인구) 공급비 → ②격자별 도달 가능한 공급비 합.<br>
+      · <b>2SFCA</b>: catchment 내 기관을 거리와 무관하게 동일 가중(이진).<br>
+      · <b>E2SFCA</b>: 가까울수록 큰 가중(Gaussian 거리감쇠) — 더 현실적.
+    </p>
   </div>
   <div class="control-section">
     <h3>Catchment 거리</h3>
@@ -69,6 +71,10 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
       <button class="btn-toggle active" data-val="3000">3 km</button>
       <button class="btn-toggle" data-val="5000">5 km</button>
     </div>
+    <p style="font-size:11px;color:#94a3b8;margin-top:7px;line-height:1.5">
+      주민이 의료기관에 접근 가능하다고 보는 <b>최대 이동거리(임계거리)</b>.<br>
+      이 거리 안의 기관만 공급으로 집계합니다(직선거리 기준). 넓힐수록 접근성↑.
+    </p>
   </div>
   <div class="control-section">
     <h3>공급량 기준</h3>
@@ -76,11 +82,29 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
       <button class="btn-toggle" data-val="ped">소아청소년과</button>
       <button class="btn-toggle" data-val="inter">내과</button>
       <button class="btn-toggle active" data-val="ped_inter">소아+내과</button>
-      <button class="btn-toggle" data-val="count">기관 수</button>
+    </div>
+    <p style="font-size:11px;color:#94a3b8;margin-top:7px;line-height:1.5">
+      공급량 = 각 의료기관의 <b>해당 진료과 전문의 수</b>.<br>
+      예) <b>소아청소년과</b> = 반경 내 소아청소년과 전문의 총원, <b>소아+내과</b> = 두 과 전문의 합.<br>
+      전문의 총원이 격자 인구 대비 얼마나 분포하는지를 2SFCA로 계산합니다.
+    </p>
+  </div>
+  <div class="control-section">
+    <h3>빈격자 (인구 0)</h3>
+    <div class="btn-group" id="empty-btns">
+      <button class="btn-toggle active-green" data-val="grey">회색</button>
+      <button class="btn-toggle" data-val="value">접근성 표시</button>
+    </div>
+  </div>
+  <div class="control-section" style="background:#f8fafc">
+    <h3>📊 결과 보기 <span style="font-weight:400;color:#94a3b8;font-size:11px">(접근성 → 핫스팟)</span></h3>
+    <div class="btn-group" id="layer-btns">
+      <button class="btn-toggle active" data-val="sfca">접근성 지수</button>
+      <button class="btn-toggle" data-val="gi">Gi* 핫스팟</button>
     </div>
   </div>
   <div class="stat-section">
-    <h3>통계 요약</h3>
+    <h3>통계 요약 <span style="font-weight:400;color:#94a3b8;font-size:11px">(인구 격자 기준)</span></h3>
     <div class="stat-grid">
       <div class="stat-card"><div class="val" id="stat-max">-</div><div class="lbl">최댓값</div></div>
       <div class="stat-card"><div class="val" id="stat-mean">-</div><div class="lbl">평균</div></div>
@@ -95,11 +119,8 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;display:flex;height:100vh
     <div class="legend-items" id="legend-items"></div>
   </div>
   <div class="info-note">
-    <strong>2SFCA</strong>: 임계거리 내 이진 가중<br>
-    <strong>E2SFCA</strong>: Gaussian 거리감쇠 함수 적용<br>
-    <strong>KDE</strong>: 접근성 값 기반 커널밀도추정<br>
-    <strong>Gi*</strong>: Getis-Ord 핫/콜드스팟 (KNN k=8, p&lt;0.05)<br><br>
-    인구 0인 격자는 표시하지 않음. 접근성 지수는 0~1로 정규화.
+    <strong>Gi*</strong>: Getis-Ord 핫/콜드스팟 (Queen 인접, p&lt;0.05) — 접근성 표면의 공간 군집.<br><br>
+    전체 격자 표시. 접근성 지수는 0~1로 정규화. 인구 0 격자는 회색/접근성값 토글로 비교.
   </div>
 </div>
 <script>
@@ -107,108 +128,114 @@ const map=L.map('map',{zoomControl:false}).setView([37.28,127.10],12);
 L.control.zoom({position:'topright'}).addTo(map);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);
 
-L.geoJSON(YONGIN_BOUNDARY,{style:{fill:false,color:'#334155',weight:2.5,opacity:0.7,dashArray:'6 4'}}).addTo(map);
-
-document.getElementById('grid-info').textContent=`${SFCA_META.grid_count}개 격자 (전체 ${SFCA_META.grid_total})`;
-
-let currentLayer='sfca',currentMethod='2sfca',currentCatchment='3000',currentMetric='ped_inter';
-let geoLayer=null;
+let currentRegion='yongin',currentLayer='sfca',currentMethod='2sfca',currentCatchment='3000',currentMetric='ped_inter',currentEmpty='grey';
+let geoLayer=null,boundaryLayer=null;
 
 const BLUE9=['#f7fbff','#deebf7','#c6dbef','#9ecae1','#6baed6','#4292c6','#2171b5','#08519c','#08306b'];
-const ORANGE9=['#fff5eb','#fee6ce','#fdd0a2','#fdae6b','#fd8d3c','#f16913','#d94801','#a63603','#7f2704'];
 const GI_COLORS={hotspot:'#dc2626',cold:'#2563eb',notSig:'#e2e8f0'};
+const EMPTY_STYLE={fillColor:'#f1f5f9',fillOpacity:0.35,weight:0.2,color:'#cbd5e1',opacity:0.5};
 
+function D(){return SFCA_DATA[currentRegion];}
 function sfcaKey(){return `${currentMethod}_${currentMetric}_${currentCatchment}`;}
-function kdeKey(){return `kde_${currentMethod}_${currentMetric}_${currentCatchment}`;}
 function giKey(){return `gi_${currentMethod}_${currentMetric}_${currentCatchment}`;}
 function gipKey(){return `gip_${currentMethod}_${currentMetric}_${currentCatchment}`;}
 
 function normalize(values){
   const nz=values.filter(v=>v>0);
   if(!nz.length)return values.map(()=>0);
-  const mn=Math.min(...nz), mx=nz.sort((a,b)=>a-b)[Math.floor(nz.length*0.98)];
+  const sorted=[...nz].sort((a,b)=>a-b);
+  const mn=sorted[0], mx=sorted[Math.floor(sorted.length*0.98)];
   if(mx<=mn)return values.map(v=>v>0?1:0);
   return values.map(v=>v<=0?0:Math.min((v-mn)/(mx-mn),1));
 }
-
 function colorFromPalette(norm,palette){
   if(norm<=0)return '#e2e8f0';
   const idx=Math.min(Math.floor(norm*(palette.length-1)),palette.length-1);
   return palette[idx];
 }
 
+function drawBoundary(){
+  if(boundaryLayer)map.removeLayer(boundaryLayer);
+  boundaryLayer=L.geoJSON(D().boundary,{style:{fill:false,color:'#334155',weight:2.5,opacity:0.7,dashArray:'6 4'}}).addTo(map);
+  try{map.fitBounds(boundaryLayer.getBounds(),{padding:[20,20]});}catch(e){}
+}
+
 function updateMap(){
   if(geoLayer)map.removeLayer(geoLayer);
-  const features=SFCA_GEOJSON.features;
+  const d=D();
+  const feats=d.geojson;
+  const showEmpty=currentEmpty==='value';
 
   if(currentLayer==='sfca'){
-    const raw=features.map(f=>f.properties[sfcaKey()]||0);
+    const raw=d.surfaces[sfcaKey()]||[];
     const norm=normalize(raw);
-    geoLayer=L.geoJSON(SFCA_GEOJSON,{
-      style(f){const n=norm[features.indexOf(f)];return{fillColor:colorFromPalette(n,BLUE9),fillOpacity:0.8,weight:0.3,color:'#fff',opacity:0.5};},
-      onEachFeature(f,layer){const p=f.properties;const i=features.indexOf(f);const n=norm[i];const r=raw[i];
-        layer.bindPopup(`<div style="font-size:13px"><b>접근성:</b> ${n.toFixed(3)} (원본: ${r>0?r.toFixed(6):'0'})<br><b>인구:</b> ${p.pop}명</div>`);}
+    geoLayer=L.geoJSON(feats,{
+      style(f){const p=f.properties;
+        if(p.pop<=0 && !showEmpty)return EMPTY_STYLE;
+        return{fillColor:colorFromPalette(norm[p.id],BLUE9),fillOpacity:0.8,weight:0.3,color:'#fff',opacity:0.5};},
+      onEachFeature(f,layer){const p=f.properties;const r=raw[p.id]||0;
+        layer.bindPopup(`<div style="font-size:13px"><b>접근성:</b> ${(norm[p.id]||0).toFixed(3)} (원본: ${r>0?r.toFixed(6):'0'})<br><b>인구:</b> ${p.pop}명</div>`);}
     }).addTo(map);
-    updateStats(raw,norm,'접근성 지수',BLUE9);
+    updateStats(raw,norm,feats.features);
   }
-  else if(currentLayer==='kde'){
-    const raw=features.map(f=>f.properties[kdeKey()]||0);
-    const norm=normalize(raw);
-    geoLayer=L.geoJSON(SFCA_GEOJSON,{
-      style(f){const n=norm[features.indexOf(f)];return{fillColor:colorFromPalette(n,ORANGE9),fillOpacity:0.8,weight:0.3,color:'#fff',opacity:0.5};},
-      onEachFeature(f,layer){const p=f.properties;const i=features.indexOf(f);
-        layer.bindPopup(`<div style="font-size:13px"><b>KDE 밀도:</b> ${norm[i].toFixed(3)}<br><b>인구:</b> ${p.pop}명</div>`);}
+  else{ // gi — 핫/콜드 군집은 강조, 유의하지 않음 셀은 접근성 음영으로 표시
+    const zv=d.gi[giKey()]||[];const pv=d.gi[gipKey()]||[];
+    const raw=d.surfaces[sfcaKey()]||[];const norm=normalize(raw);
+    geoLayer=L.geoJSON(feats,{
+      style(f){const p=f.properties;
+        if(p.pop<=0 && !showEmpty)return EMPTY_STYLE;
+        const z=zv[p.id]||0,pp=pv[p.id]==null?1:pv[p.id];
+        if(pp<0.05)return{fillColor:z>0?GI_COLORS.hotspot:GI_COLORS.cold,fillOpacity:0.88,weight:0.4,color:'#fff',opacity:0.6};
+        return{fillColor:colorFromPalette(norm[p.id],BLUE9),fillOpacity:0.6,weight:0.3,color:'#fff',opacity:0.4};},
+      onEachFeature(f,layer){const p=f.properties;const z=zv[p.id]||0,pp=pv[p.id]==null?1:pv[p.id];
+        let label='유의하지 않음';if(pp<0.05)label=z>0?'핫스팟 (높은 접근성 군집)':'콜드스팟 (낮은 접근성 군집)';
+        layer.bindPopup(`<div style="font-size:13px"><b>${label}</b><br>Z: ${z.toFixed(3)}, p: ${pp.toFixed(4)}<br><b>접근성:</b> ${(norm[p.id]||0).toFixed(3)}<br><b>인구:</b> ${p.pop}명</div>`);}
     }).addTo(map);
-    updateStats(raw,norm,'KDE 밀도',ORANGE9);
-  }
-  else if(currentLayer==='gi'){
-    const zvals=features.map(f=>f.properties[giKey()]||0);
-    const pvals=features.map(f=>f.properties[gipKey()]||1);
-    geoLayer=L.geoJSON(SFCA_GEOJSON,{
-      style(f){const i=features.indexOf(f);const z=zvals[i],p=pvals[i];
-        let c=GI_COLORS.notSig;
-        if(p<0.05){c=z>0?GI_COLORS.hotspot:GI_COLORS.cold;}
-        return{fillColor:c,fillOpacity:p<0.05?0.8:0.3,weight:0.3,color:'#fff',opacity:0.5};},
-      onEachFeature(f,layer){const i=features.indexOf(f);const z=zvals[i],p=pvals[i];const pop=f.properties.pop;
-        let label='유의하지 않음';if(p<0.05)label=z>0?'핫스팟 (높은 접근성 군집)':'콜드스팟 (낮은 접근성 군집)';
-        layer.bindPopup(`<div style="font-size:13px"><b>${label}</b><br>Z: ${z.toFixed(3)}, p: ${p.toFixed(4)}<br><b>인구:</b> ${pop}명</div>`);}
-    }).addTo(map);
-    updateGiStats(zvals,pvals);
+    updateGiStats(zv,pv,feats.features);
   }
 }
 
-function updateStats(raw,norm,title,palette){
-  const nz=norm.filter(v=>v>0);const sorted=[...nz].sort((a,b)=>a-b);
+function updateStats(raw,norm,features){
+  // 인구>0 격자 기준
+  const idx=features.filter(f=>f.properties.pop>0).map(f=>f.properties.id);
+  const nz=idx.map(i=>norm[i]).filter(v=>v>0);
+  const sorted=[...nz].sort((a,b)=>a-b);
   document.getElementById('stat-max').textContent=nz.length?'1.000':'N/A';
   document.getElementById('stat-mean').textContent=nz.length?(nz.reduce((a,b)=>a+b,0)/nz.length).toFixed(3):'N/A';
   document.getElementById('stat-median').textContent=sorted.length?sorted[Math.floor(sorted.length/2)].toFixed(3):'N/A';
-  document.getElementById('stat-zero').textContent=`${raw.filter(v=>v<=0).length} / ${raw.length}`;
-  document.getElementById('legend-title').textContent=title;
-  document.getElementById('gradient-bar').style.background=`linear-gradient(to right,${palette.join(',')})`;
+  const zero=idx.filter(i=>(raw[i]||0)<=0).length;
+  document.getElementById('stat-zero').textContent=`${zero} / ${idx.length}`;
+  resetStatLabels();
+  document.getElementById('legend-title').textContent='접근성 지수';
   document.getElementById('gradient-bar').style.display='';
+  document.getElementById('gradient-bar').style.background=`linear-gradient(to right,${BLUE9.join(',')})`;
   document.getElementById('leg-min').textContent='0 (낮음)';
   document.getElementById('leg-max').textContent='1.0 (높음)';
   document.getElementById('legend-items').innerHTML='<div class="legend-item"><div class="legend-swatch" style="background:#e2e8f0"></div>접근불가 (공급 없음)</div>';
 }
 
-function updateGiStats(zvals,pvals){
+function updateGiStats(zv,pv,features){
+  // 인구>0 격자 기준
+  const idx=features.filter(f=>f.properties.pop>0).map(f=>f.properties.id);
   let hot=0,cold=0,ns=0;
-  for(let i=0;i<zvals.length;i++){if(pvals[i]<0.05){zvals[i]>0?hot++:cold++;}else ns++;}
+  idx.forEach(i=>{const p=pv[i]==null?1:pv[i];if(p<0.05){(zv[i]||0)>0?hot++:cold++;}else ns++;});
   document.getElementById('stat-max').textContent=hot+'개';
   document.getElementById('stat-mean').textContent=cold+'개';
   document.getElementById('stat-median').textContent=ns+'개';
-  document.getElementById('stat-zero').textContent=`${hot+cold} / ${zvals.length}`;
+  document.getElementById('stat-zero').textContent=`${hot+cold} / ${idx.length}`;
   document.querySelector('#stat-max + .lbl').textContent='핫스팟';
   document.querySelector('#stat-mean + .lbl').textContent='콜드스팟';
   document.querySelector('#stat-median + .lbl').textContent='유의하지 않음';
   document.querySelector('#stat-zero + .lbl').textContent='유의 격자';
-  document.getElementById('legend-title').textContent='Gi* 핫스팟/콜드스팟';
-  document.getElementById('gradient-bar').style.display='none';
-  document.getElementById('leg-min').textContent='';document.getElementById('leg-max').textContent='';
+  document.getElementById('legend-title').textContent='Gi* 핫스팟 · 콜드스팟';
+  const gb=document.getElementById('gradient-bar');
+  gb.style.display='';gb.style.background=`linear-gradient(to right,${BLUE9.join(',')})`;
+  document.getElementById('leg-min').textContent='접근성 낮음';
+  document.getElementById('leg-max').textContent='접근성 높음';
   document.getElementById('legend-items').innerHTML=`
     <div class="legend-item"><div class="legend-swatch" style="background:${GI_COLORS.hotspot}"></div>핫스팟 (p&lt;0.05, Z&gt;0)</div>
     <div class="legend-item"><div class="legend-swatch" style="background:${GI_COLORS.cold}"></div>콜드스팟 (p&lt;0.05, Z&lt;0)</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:${GI_COLORS.notSig}"></div>유의하지 않음</div>`;
+    <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(to right,#deebf7,#08306b)"></div>유의하지 않음 (접근성 음영)</div>`;
 }
 
 const defaultLabels={max:'최댓값',mean:'평균',median:'중앙값',zero:'접근불가'};
@@ -219,19 +246,29 @@ function resetStatLabels(){
   document.querySelector('#stat-zero + .lbl').textContent=defaultLabels.zero;
 }
 
+function refreshHeader(){
+  const m=D().meta;
+  document.getElementById('region-label').textContent=m.label;
+  document.getElementById('grid-info').textContent=`${m.grid_count}개 격자 (전체 ${m.grid_total})`;
+}
+
 function setupBtns(id,cls,cb){
   document.querySelectorAll(`#${id} .btn-toggle`).forEach(b=>{
     b.addEventListener('click',()=>{
-      document.querySelectorAll(`#${id} .btn-toggle`).forEach(x=>x.classList.remove('active','active-orange','active-green'));
+      document.querySelectorAll(`#${id} .btn-toggle`).forEach(x=>x.classList.remove('active','active-green'));
       b.classList.add(cls);cb(b.dataset.val);
     });
   });
 }
-setupBtns('layer-btns','active',v=>{currentLayer=v;resetStatLabels();updateMap();});
+setupBtns('region-btns','active',v=>{currentRegion=v;refreshHeader();drawBoundary();updateMap();});
+setupBtns('layer-btns','active',v=>{currentLayer=v;updateMap();});
 setupBtns('method-btns','active',v=>{currentMethod=v;updateMap();});
 setupBtns('catchment-btns','active',v=>{currentCatchment=v;updateMap();});
 setupBtns('metric-btns','active',v=>{currentMetric=v;updateMap();});
+setupBtns('empty-btns','active-green',v=>{currentEmpty=v;updateMap();});
 
+refreshHeader();
+drawBoundary();
 updateMap();
 </script>
 </body>

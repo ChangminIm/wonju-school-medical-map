@@ -1,22 +1,30 @@
 """
-2SFCA / E2SFCA + KDE + Getis-Ord Gi* Analysis
-for Yongin Elementary School Medical Accessibility.
-Outputs result.js + hotspot.js for web visualization.
+2SFCA / E2SFCA + Getis-Ord Gi* (Queen) — 용인·원주 초등학생 의료 접근성.
+- 전체 격자(빈격자 포함) 출력. 인구=0 셀도 feature 로 내보냄(웹에서 회색/값 비교).
+- Gi* 공간가중 = Queen 인접(전체 격자 기준), row-standardized.
+- KDE 제거.
+- 출력: result.js → const SFCA_DATA = {yongin:{meta,geojson,boundary}, wonju:{...}};
 """
 import geopandas as gpd
 import numpy as np
 import json
 import os
+import warnings
+
+from libpysal.weights import Queen
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-GRID_SHP = os.path.join(BASE_DIR, "data", "YI_500m_elementary.shp")
+
+REGIONS = {
+    "yongin": {"shp": "YI_500m_elementary.shp", "med": "yongin", "label": "용인시"},
+    "wonju": {"shp": "WJ_500m_elementary.shp", "med": "wonju", "label": "원주시"},
+}
 
 CATCHMENTS = [1000, 3000, 5000]
 SUPPLY_METRICS = {
     "ped": "소아청소년과 전문의",
     "inter": "내과 전문의",
     "ped_inter": "소아+내과 합계",
-    "count": "기관 수",
 }
 
 
@@ -26,40 +34,29 @@ def gaussian_weight(d, d0):
     return np.exp(-0.5 * (d / (d0 / 2.5)) ** 2)
 
 
-def load_grid():
-    gdf = gpd.read_file(GRID_SHP)
-    gdf_proj = gdf.copy()
+def load_grid(shp_name):
+    gdf = gpd.read_file(os.path.join(BASE_DIR, "data", shp_name))
     gdf = gdf.to_crs(epsg=4326)
     gdf["val"] = gdf["val"].fillna(0).astype(float)
-    gdf["centroid_lat"] = gdf.geometry.centroid.y
-    gdf["centroid_lng"] = gdf.geometry.centroid.x
-    gdf_proj["val"] = gdf_proj["val"].fillna(0).astype(float)
-    cx = gdf_proj.geometry.centroid.x.values
-    cy = gdf_proj.geometry.centroid.y.values
-    gdf["cx_proj"] = cx
-    gdf["cy_proj"] = cy
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        gdf["centroid_lat"] = gdf.geometry.centroid.y
+        gdf["centroid_lng"] = gdf.geometry.centroid.x
     return gdf
 
 
-def load_medical():
+def load_medical(region):
     json_path = os.path.join(BASE_DIR, "..", "map_data.json")
     with open(json_path, "r", encoding="utf-8") as f:
         all_data = json.load(f)
-    meds = all_data["yongin"]["medical"]
+    meds = all_data[region]["medical"]
     result = []
     for m in meds:
         result.append({
-            "name": m["name"],
-            "type": m["type"],
-            "category": m["category"],
-            "lat": m["lat"],
-            "lng": m["lng"],
-            "ped": m["ped"],
-            "inter": m["inter"],
+            "lat": m["lat"], "lng": m["lng"],
             "supply_ped": m["ped"],
             "supply_inter": m["inter"],
             "supply_ped_inter": m["ped"] + m["inter"],
-            "supply_count": 1,
         })
     return result
 
@@ -109,74 +106,73 @@ def run_e2sfca(grid_lats, grid_lngs, grid_pops, med_lats, med_lngs, med_supply, 
     return A
 
 
-def run_kde(gdf, results_dict, pop_mask):
-    """KDE on accessibility scores for populated grid cells."""
-    from scipy.stats import gaussian_kde
-
-    sub = gdf[pop_mask].copy()
-    coords = np.vstack([sub["cx_proj"].values, sub["cy_proj"].values])
-
-    kde_results = {}
-    for key, vals_all in results_dict.items():
-        vals = np.array(vals_all)[pop_mask]
-        if vals.max() <= 0:
-            kde_results[f"kde_{key}"] = np.zeros(len(sub)).tolist()
-            continue
-        weights = vals.copy()
-        weights[weights < 0] = 0
-        if weights.sum() == 0:
-            kde_results[f"kde_{key}"] = np.zeros(len(sub)).tolist()
-            continue
-        try:
-            kde = gaussian_kde(coords, weights=weights, bw_method=0.15)
-            density = kde(coords)
-            dmin, dmax = density.min(), density.max()
-            if dmax > dmin:
-                density = (density - dmin) / (dmax - dmin)
-            else:
-                density = np.zeros_like(density)
-            kde_results[f"kde_{key}"] = density.tolist()
-        except Exception:
-            kde_results[f"kde_{key}"] = np.zeros(len(sub)).tolist()
-    return kde_results
+def queen_weights(gdf):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return Queen.from_dataframe(gdf, silence_warnings=True)
 
 
-def run_gi_star(gdf, results_dict, pop_mask):
-    """Getis-Ord Gi* using KNN weights on populated cells only."""
-    from libpysal.weights import KNN
+def largest_component_mask(gdf):
+    """Queen 연결요소 중 최대 본체 마스크 (외딴 이상치 셀 제거용)."""
+    w = queen_weights(gdf)
+    labels = np.asarray(w.component_labels)
+    vals, counts = np.unique(labels, return_counts=True)
+    main = vals[counts.argmax()]
+    return labels == main
+
+
+def run_gi_star_queen(gdf, results_dict):
+    """Getis-Ord Gi* — Queen 인접(전체 격자), row-standardized. 접근성 면 위 핫/콜드스팟."""
     from esda.getisord import G_Local
 
-    sub = gdf[pop_mask].copy().reset_index(drop=True)
-    w = KNN.from_dataframe(sub, k=8)
+    w = queen_weights(gdf)
     w.transform = "R"
 
+    n = len(gdf)
     gi_results = {}
     for key, vals_all in results_dict.items():
-        vals = np.array(vals_all)[pop_mask]
+        vals = np.asarray(vals_all, dtype=float)
         if vals.max() <= 0 or np.std(vals) == 0:
-            gi_results[f"gi_{key}"] = np.zeros(len(sub)).tolist()
-            gi_results[f"gip_{key}"] = np.ones(len(sub)).tolist()
+            gi_results[f"gi_{key}"] = np.zeros(n).tolist()
+            gi_results[f"gip_{key}"] = np.ones(n).tolist()
             continue
         try:
             gi = G_Local(vals, w, transform="R", permutations=999, seed=42)
-            gi_results[f"gi_{key}"] = gi.Zs.tolist()
-            gi_results[f"gip_{key}"] = gi.p_sim.tolist()
+            z = np.nan_to_num(np.asarray(gi.Zs, dtype=float), nan=0.0)
+            p = np.nan_to_num(np.asarray(gi.p_sim, dtype=float), nan=1.0)
+            gi_results[f"gi_{key}"] = z.tolist()
+            gi_results[f"gip_{key}"] = p.tolist()
         except Exception as e:
-            print(f"    Gi* failed for {key}: {e}")
-            gi_results[f"gi_{key}"] = np.zeros(len(sub)).tolist()
-            gi_results[f"gip_{key}"] = np.ones(len(sub)).tolist()
+            print(f"    Gi* 실패 {key}: {e}")
+            gi_results[f"gi_{key}"] = np.zeros(n).tolist()
+            gi_results[f"gip_{key}"] = np.ones(n).tolist()
     return gi_results
 
 
-def main():
-    print("Loading grid data...")
-    gdf = load_grid()
-    pop_mask = gdf["val"].values > 0
-    print(f"  {len(gdf)} grid cells, {pop_mask.sum()} with population")
+def round_geom(gj, nd=5):
+    def r(c):
+        return [round(c[0], nd), round(c[1], nd)]
+    g = dict(gj)
+    if gj["type"] == "Polygon":
+        g["coordinates"] = [[r(c) for c in ring] for ring in gj["coordinates"]]
+    elif gj["type"] == "MultiPolygon":
+        g["coordinates"] = [[[r(c) for c in ring] for ring in poly] for poly in gj["coordinates"]]
+    return g
 
-    print("Loading medical data...")
-    meds = load_medical()
-    print(f"  {len(meds)} medical facilities")
+
+def run_region(region, conf):
+    print(f"\n=== {conf['label']} ({region}) ===")
+    gdf = load_grid(conf["shp"])
+    # 격자 본체만 유지 — Queen 비연결 외딴 이상치 셀 제거 (시 경계 밖 떠도는 셀)
+    keep = largest_component_mask(gdf)
+    if (~keep).sum():
+        print(f"  외딴 셀 {int((~keep).sum())}개 제거 (Queen 연결요소 분리)")
+        gdf = gdf[keep].reset_index(drop=True)
+    pop_mask = gdf["val"].values > 0
+    print(f"  격자 {len(gdf)}셀, 인구>0 {pop_mask.sum()}셀, val합 {gdf['val'].sum():.0f}")
+
+    meds = load_medical(conf["med"])
+    print(f"  의료기관 {len(meds)}개")
 
     grid_lats = gdf["centroid_lat"].values
     grid_lngs = gdf["centroid_lng"].values
@@ -189,67 +185,62 @@ def main():
         med_supply = np.array([m[f"supply_{metric_key}"] for m in meds])
         active = med_supply > 0
         if active.sum() == 0:
-            print(f"  Skipping {metric_label}: no active facilities")
             continue
         for d0 in CATCHMENTS:
-            print(f"  Computing: {metric_label} / {d0}m ...")
-            k2 = f"2sfca_{metric_key}_{d0}"
-            ke = f"e2sfca_{metric_key}_{d0}"
-            sfca_results[k2] = run_2sfca(
+            sfca_results[f"2sfca_{metric_key}_{d0}"] = run_2sfca(
                 grid_lats, grid_lngs, grid_pops,
-                med_lats[active], med_lngs[active], med_supply[active], d0
-            ).tolist()
-            sfca_results[ke] = run_e2sfca(
+                med_lats[active], med_lngs[active], med_supply[active], d0).tolist()
+            sfca_results[f"e2sfca_{metric_key}_{d0}"] = run_e2sfca(
                 grid_lats, grid_lngs, grid_pops,
-                med_lats[active], med_lngs[active], med_supply[active], d0
-            ).tolist()
+                med_lats[active], med_lngs[active], med_supply[active], d0).tolist()
+    print(f"  접근성 표면 {len(sfca_results)}개 계산")
 
-    # KDE
-    print("Running KDE...")
-    kde_results = run_kde(gdf, sfca_results, pop_mask)
+    print("  Gi* (Queen) ...")
+    gi_results = run_gi_star_queen(gdf, sfca_results)
 
-    # Gi*
-    print("Running Getis-Ord Gi*...")
-    gi_results = run_gi_star(gdf, sfca_results, pop_mask)
+    # 컬럼형 출력: geometry 는 {id,pop} 만, 값은 surface별 배열(키 반복 제거 → 용량↓)
+    geoms = list(gdf.geometry)
+    pops = gdf["val"].values
+    features = [{
+        "type": "Feature",
+        "geometry": round_geom(geoms[i].__geo_interface__, 5),
+        "properties": {"id": i, "pop": int(round(pops[i]))},
+    } for i in range(len(gdf))]
 
-    # Build GeoJSON (only populated cells)
-    print("Building output...")
-    gdf_pop = gdf[pop_mask].copy().reset_index(drop=True)
-    features = []
-    pop_indices = np.where(pop_mask)[0]
+    surfaces = {k: [round(v, 6) for v in vals] for k, vals in sfca_results.items()}
+    gi = {}
+    for k, vals in gi_results.items():
+        nd = 3
+        gi[k] = [round(v, nd) for v in vals]
 
-    for local_i, (_, row) in enumerate(gdf_pop.iterrows()):
-        global_i = pop_indices[local_i]
-        geom = row.geometry.__geo_interface__
-        props = {"id": local_i, "pop": row["val"]}
-        for key, vals in sfca_results.items():
-            v = vals[global_i]
-            props[key] = round(v, 8) if v > 0 else 0
-        for key, vals in kde_results.items():
-            props[key] = round(vals[local_i], 6)
-        for key, vals in gi_results.items():
-            props[key] = round(vals[local_i], 4)
-        features.append({"type": "Feature", "geometry": geom, "properties": props})
-
-    geojson = {"type": "FeatureCollection", "features": features}
+    # 경계 = 격자 dissolve (시 외곽선)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        boundary = gdf.dissolve().geometry.iloc[0].simplify(0.0008)
+    boundary_gj = round_geom(boundary.__geo_interface__, 5)
 
     meta = {
+        "label": conf["label"],
         "catchments": CATCHMENTS,
         "methods": ["2sfca", "e2sfca"],
         "metrics": SUPPLY_METRICS,
         "grid_count": int(pop_mask.sum()),
         "grid_total": len(gdf),
         "med_count": len(meds),
-        "analyses": ["sfca", "kde", "gi_star"],
+        "center": [float(np.mean(grid_lats)), float(np.mean(grid_lngs))],
+        "analyses": ["sfca", "gi_star"],
     }
+    return {"meta": meta, "geojson": {"type": "FeatureCollection", "features": features},
+            "surfaces": surfaces, "gi": gi, "boundary": boundary_gj}
 
+
+def main():
+    data = {region: run_region(region, conf) for region, conf in REGIONS.items()}
     out_path = os.path.join(BASE_DIR, "result.js")
     with open(out_path, "w", encoding="utf-8") as f:
-        f.write("const SFCA_META = " + json.dumps(meta, ensure_ascii=False) + ";\n")
-        f.write("const SFCA_GEOJSON = " + json.dumps(geojson, ensure_ascii=False) + ";\n")
-
-    print(f"Output: {out_path} ({os.path.getsize(out_path) / 1024:.1f} KB)")
-    print("Done!")
+        f.write("const SFCA_DATA = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n")
+    print(f"\n출력: {out_path} ({os.path.getsize(out_path) / 1024 / 1024:.2f} MB)")
+    print("완료!")
 
 
 if __name__ == "__main__":
