@@ -374,7 +374,7 @@ SF_REGION = {
     "wonju": {"label": "원주시", "ko": "원주", "en": "wonju"},
 }
 SF_METHOD = {"2sfca": "2SFCA", "e2sfca": "E2SFCA"}
-SF_CATCH = {"1km": "1000", "3km": "3000"}
+SF_CATCH = {"1km": "1000", "3km": "3000", "5km": "5000"}
 
 
 def normalize_access(vals):
