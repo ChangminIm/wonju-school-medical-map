@@ -52,8 +52,8 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;height:100vh;display:flex
   <a class="home" href="index.html">← 메인으로</a>
   <h1>🟩 소아비만율 단계구분도 · 원주시</h1>
   <div class="seg" id="basisSeg">
-    <button data-basis="thiessen" class="active">티센 영향권</button>
-    <button data-basis="area">통학구역</button>
+    <button data-basis="area" class="active">통학구역</button>
+    <button data-basis="thiessen">티센 영향권</button>
   </div>
   <div class="seg" id="levelSeg">
     <button data-level="elementary" class="active">초등학교</button>
@@ -85,6 +85,14 @@ const GI_COLORS={
   'Cold 99%':'#2563eb'
 };
 const GI_ORDER=['Hot 99%','Hot 95%','Not Significant','Cold 95%','Cold 99%'];
+// 범례 표기용 핫스팟 분류 라벨
+const GI_LABEL={
+  'Hot 99%':'Hotspot (p-value <0.01)',
+  'Hot 95%':'Hotspot (p-value <0.05)',
+  'Not Significant':'Not Significant',
+  'Cold 95%':'Coldspot (p-value <0.05)',
+  'Cold 99%':'Coldspot (p-value <0.01)'
+};
 
 const map=L.map('map',{zoomControl:false}).setView([37.342,127.94],11);
 L.control.zoom({position:'topright'}).addTo(map);
@@ -92,7 +100,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',maxZoom:19
 }).addTo(map);
 
-let currentBasis='thiessen';
+let currentBasis='area';
 let currentLevel='elementary';
 let currentMetric='rate';
 let polyLayer=null, pointLayer=null;
@@ -146,11 +154,6 @@ function areaPopup(p){
 // ── 티센 영향권 팝업 ──
 function thiessenPopup(p){
   const alsoRow=p.also?`<div class="also">※ 영향권 공유: ${p.also}</div>`:'';
-  const giRow=(p.giClass!=null)
-    ? `<tr><td>Gi* 분류</td><td>${p.giClass}</td></tr>`
-      +`<tr><td>Gi* Z</td><td>${p.giZ!=null?p.giZ.toFixed(2):'—'}</td></tr>`
-      +`<tr><td>Gi* p</td><td>${p.giP!=null?p.giP.toFixed(3):'—'}</td></tr>`
-    : '';
   if(currentMetric==='gi'){
     const cls=p.giClass||'—';
     return `<div class="info-popup"><h3>${p.name}</h3>`
@@ -169,7 +172,6 @@ function thiessenPopup(p){
     +`<tr><td>학교급</td><td>${p.level}</td></tr>`
     +`<tr><td>학생 수</td><td>${p.students}명</td></tr>`
     +`<tr><td>소아비만(추정)</td><td>약 ${Math.round(p.obese)}명</td></tr>`
-    +giRow
     +`</table>${alsoRow}</div>`;
 }
 
@@ -202,7 +204,7 @@ function render(){
   if(document.getElementById('showPoints').checked) pointLayer.addTo(map);
 
   document.getElementById('legend-title').textContent=
-    currentMetric==='gi'?'Gi* 핫스팟 (Queen 인접, p<0.05/0.01)':'비만율 (%)';
+    currentMetric==='gi'?'핫스팟 분류':'비만율 (%)';
   if(currentMetric==='gi') buildLegendGi(d);
   else buildLegendRate(breaks);
   buildStats(d);
@@ -228,7 +230,7 @@ function buildLegendGi(d){
   GI_ORDER.forEach(cls=>{
     const row=document.createElement('div');row.className='legend-row';
     const n=counts[cls]||0;
-    row.innerHTML=`<span class="legend-sw" style="background:${GI_COLORS[cls]}"></span><span>${cls} <span style="color:#888">(${n})</span></span>`;
+    row.innerHTML=`<span class="legend-sw" style="background:${GI_COLORS[cls]}"></span><span>${GI_LABEL[cls]} <span style="color:#888">(${n})</span></span>`;
     el.appendChild(row);
   });
 }

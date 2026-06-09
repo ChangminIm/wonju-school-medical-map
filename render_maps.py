@@ -31,6 +31,13 @@ GI_COLORS = {
     "Cold 99%": "#2563eb",
 }
 GI_ORDER = ["Hot 99%", "Hot 95%", "Not Significant", "Cold 95%", "Cold 99%"]
+GI_LABEL = {
+    "Hot 99%": "Hotspot (p-value <0.01)",
+    "Hot 95%": "Hotspot (p-value <0.05)",
+    "Not Significant": "Not Significant",
+    "Cold 95%": "Coldspot (p-value <0.05)",
+    "Cold 99%": "Coldspot (p-value <0.01)",
+}
 
 with open(os.path.join(BASE, "map_data.json"), encoding="utf-8") as f:
     ALL = json.load(f)
@@ -45,7 +52,7 @@ CONF = {
         "shp": "원주시_초등학교_티센.shp",
         "lvname": "초등학교",
         "title_rate": "원주시 초등학교 소아비만율 분포",
-        "title_gi": "원주시 초등학교 소아비만율 Gi* 핫스팟",
+        "title_gi": "원주시 초등학교 소아비만율 핫스팟",
         "out_rate": "원주_초등학교_소아비만율.png",
         "out_gi": "원주_초등학교_소아비만_Gi.png",
         "alt_rate": "wonju_elem_obesity.png",
@@ -55,7 +62,7 @@ CONF = {
         "shp": "원주시_중학교_티센.shp",
         "lvname": "중학교",
         "title_rate": "원주시 중학교 소아비만율 분포",
-        "title_gi": "원주시 중학교 소아비만율 Gi* 핫스팟",
+        "title_gi": "원주시 중학교 소아비만율 핫스팟",
         "out_rate": "원주_중학교_소아비만율.png",
         "out_gi": "원주_중학교_소아비만_Gi.png",
         "alt_rate": "wonju_mid_obesity.png",
@@ -121,9 +128,10 @@ def compute_gi(gdf, color_rates):
     return out
 
 
-def render_map(gdf, pgdf, title, legend_items, legend_title, lvname_label, outpath):
+def render_map(gdf, pgdf, title, legend_items, legend_title, lvname_label, outpath, subtitle=None):
     """공통 렌더링: OSM NoLabels + 노스애로우 + 10km 스케일바.
-    gdf 는 EPSG:5179, 'fill' 컬럼에 색상 hex 가 들어 있어야 함."""
+    gdf 는 EPSG:5179, 'fill' 컬럼에 색상 hex 가 들어 있어야 함.
+    subtitle 지정 시 제목 아래 작은 글씨로 부제(기준 표기)를 덧붙임."""
     fig, ax = plt.subplots(figsize=(8.8, 9.6), dpi=150)
     fig.patch.set_facecolor("white")
 
@@ -144,7 +152,11 @@ def render_map(gdf, pgdf, title, legend_items, legend_title, lvname_label, outpa
     cx.add_basemap(ax, source=cx.providers.CartoDB.PositronNoLabels, attribution=False, crs=gdf.crs)
 
     ax.set_axis_off()
-    ax.set_title(title, fontsize=18, fontweight="bold", pad=14)
+    ax.set_title(title, fontsize=18, fontweight="bold", pad=26 if subtitle else 14)
+    if subtitle:
+        ax.annotate(subtitle, xy=(0.5, 1.0), xytext=(0, 8), xycoords="axes fraction",
+                    textcoords="offset points", ha="center", va="bottom",
+                    fontsize=11.5, color="#555")
 
     leg = ax.legend(handles=legend_items, title=legend_title, loc="upper right",
                     fontsize=10, title_fontsize=11, frameon=True, framealpha=0.95,
@@ -262,12 +274,12 @@ for level, c in CONF.items():
     for cls in GI_ORDER:
         n = counts.get(cls, 0)
         legend_items_gi.append(Patch(facecolor=GI_COLORS[cls], edgecolor="#999",
-                                     label="%s (%d)" % (cls, n)))
+                                     label="%s (%d)" % (GI_LABEL[cls], n)))
     legend_items_gi.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
                                   markeredgecolor="white", markersize=8, label=c["lvname"]))
     out_gi = os.path.join(OUTDIR, c["out_gi"])
-    render_map(gdf, pgdf, c["title_gi"], legend_items_gi, "Gi* (Queen, p<0.05/0.01)",
-               c["lvname"], out_gi)
+    render_map(gdf, pgdf, c["title_gi"], legend_items_gi, "핫스팟 분류",
+               c["lvname"], out_gi, subtitle="(티센폴리곤 기준)")
     shutil.copyfile(out_gi, os.path.join(OUTDIR, c["alt_gi"]))
     sz = os.path.getsize(out_gi) / 1024
     print("저장: %s (%.1f KB) Gi* counts=%s" % (c["out_gi"], sz, counts))
@@ -284,7 +296,7 @@ SA_CONF = {
     "elementary": {
         "lvname": "초등학교",
         "title_rate": "원주시 초등학교 통학구역 소아비만율 분포",
-        "title_gi": "원주시 초등학교 통학구역 소아비만율 Gi* 핫스팟",
+        "title_gi": "원주시 초등학교 소아비만율 핫스팟",
         "out_rate": "원주_초등학교_통학구역_소아비만율.png",
         "out_gi": "원주_초등학교_통학구역_소아비만_Gi.png",
         "alt_rate": "wonju_elem_area_obesity.png",
@@ -293,7 +305,7 @@ SA_CONF = {
     "middle": {
         "lvname": "중학교",
         "title_rate": "원주시 중학교 통학구역 소아비만율 분포",
-        "title_gi": "원주시 중학교 통학구역 소아비만율 Gi* 핫스팟",
+        "title_gi": "원주시 중학교 소아비만율 핫스팟",
         "out_rate": "원주_중학교_통학구역_소아비만율.png",
         "out_gi": "원주_중학교_통학구역_소아비만_Gi.png",
         "alt_rate": "wonju_mid_area_obesity.png",
@@ -335,12 +347,12 @@ for level, sc in SA_CONF.items():
     legend_items_gi = []
     for cls in GI_ORDER:
         legend_items_gi.append(Patch(facecolor=GI_COLORS[cls], edgecolor="#999",
-                                     label="%s (%d)" % (cls, sa_counts.get(cls, 0))))
+                                     label="%s (%d)" % (GI_LABEL[cls], sa_counts.get(cls, 0))))
     legend_items_gi.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
                                   markeredgecolor="white", markersize=8, label=sc["lvname"]))
     sa_out_gi = os.path.join(OUTDIR, sc["out_gi"])
     render_map(sa_gdf, sa_pgdf, sc["title_gi"],
-               legend_items_gi, "Gi* (Queen, p<0.05/0.01)", sc["lvname"], sa_out_gi)
+               legend_items_gi, "핫스팟 분류", sc["lvname"], sa_out_gi, subtitle="(통학구역 기준)")
     shutil.copyfile(sa_out_gi, os.path.join(OUTDIR, sc["alt_gi"]))
     print("저장: %s (%.1f KB) Gi* counts=%s"
           % (sc["out_gi"], os.path.getsize(sa_out_gi) / 1024, sa_counts))
