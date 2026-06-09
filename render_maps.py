@@ -364,7 +364,8 @@ for level, sc in SA_CONF.items():
 # 2SFCA 접근성 PNG (용인·원주) — 2sfca/result.js 기반
 # 기본 조합: 2SFCA · 소아+내과 · 3km. 빈격자(인구0)=회색. 5등급 분위수 + 블루 팔레트.
 # ──────────────────────────────────────────────────────────────
-ACCESS_COLORS = ["#eff3ff", "#bdd7e7", "#6baed6", "#3182bd", "#08519c"]
+ACCESS_COLORS = ["#deebf7", "#9ecae1", "#6baed6", "#3182bd", "#08519c"]
+ACCESS_NONE = "#ef9a9a"   # 접근불가(인구 있으나 공급 0) = 연한 빨강(사각지대 강조)
 SF_KEY = "2sfca_ped_inter_3000"
 sf_txt = open(os.path.join(BASE, "2sfca", "result.js"), encoding="utf-8").read()
 SF = json.loads(sf_txt[sf_txt.index("{"):sf_txt.rindex("}") + 1])
@@ -404,7 +405,7 @@ for reg, sc in SF_CONF.items():
         if row["pop"] <= 0:
             return "#d9d9d9"          # 빈격자(인구0) = 회색
         if row["acc"] <= 0:
-            return "#eef0f3"          # 인구 있으나 접근불가
+            return ACCESS_NONE        # 인구 있으나 접근불가 = 빨강
         n = row["nrm"]
         for i in range(5):
             if n <= edges[i + 1] or i == 4:
@@ -425,7 +426,7 @@ for reg, sc in SF_CONF.items():
     for i in range(4, -1, -1):
         legend_items.append(Patch(facecolor=ACCESS_COLORS[i], edgecolor="#999",
                                   label="%.2f ~ %.2f" % (edges[i], edges[i + 1])))
-    legend_items.append(Patch(facecolor="#eef0f3", edgecolor="#999", label="접근불가 (0)"))
+    legend_items.append(Patch(facecolor=ACCESS_NONE, edgecolor="#999", label="접근불가 (인구○·공급0)"))
     legend_items.append(Patch(facecolor="#d9d9d9", edgecolor="#999", label="인구 없음"))
     legend_items.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#222",
                                markeredgecolor="white", markersize=7, label="전문의 보유 기관"))
